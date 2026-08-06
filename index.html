@@ -3,88 +3,101 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>شاشة انتظار المراجع - مركز العمران للرعاية الأولية</title>
+    <title>شاشة انتظار المراجع - مركز صحي العمران للرعاية الأولية</title>
     
     <!-- إعدادات PWA لتشغيله كبرنامج مستقل -->
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#006643">
+    <meta name="theme-color" content="#0b0f19">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
     <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f4f7f6;
-            margin: 0;
-            padding: 0;
-            direction: rtl;
+            background-color: #0b0f19;
+            color: white;
+            font-family: 'Cairo', sans-serif;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
-            min-height: 100vh;
+            justify-content: space-between;
+            padding: 20px 30px;
         }
-        /* الهيدر: الشعار في أقصى اليمين، واسم المركز في أقصى اليسار حسب رسمتك */
+
+        /* الهيدر: الشعار في أقصى اليمين، واسم المركز في أقصى اليسار تماماً مثل نظام النداء */
         .header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 20px 40px;
-            background: #ffffff;
-            border-bottom: 3px solid #006643;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            width: 100%;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #1e293b;
         }
-        .logo-container img {
-            height: 60px;
+        .cluster-logo {
+            height: 90px;
+            width: auto;
+            object-fit: contain;
+            background: transparent;
         }
         .center-title {
-            font-size: 26px;
+            font-size: 1.8rem;
             font-weight: bold;
-            color: #006643;
+            color: #ffc107;
+            text-align: left;
         }
-        /* المحتوى الرئيسي */
+
+        /* محتوى شاشة المراجع */
         .main-content {
             flex: 1;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
-            padding: 20px;
-        }
-        .container {
-            max-width: 650px;
-            width: 100%;
-            background: white;
-            padding: 50px;
-            border-radius: 16px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
             text-align: center;
-            border: 1px solid #e0e0e0;
         }
-        .ticket-box {
-            font-size: 70px;
+
+        .display-box {
+            background: #151c2c;
+            border: 2px solid #2a344d;
+            border-radius: 25px;
+            padding: 50px 40px;
+            text-align: center;
+            width: 100%;
+            max-width: 750px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.6);
+            margin-bottom: 25px;
+        }
+
+        .display-number {
+            font-size: 6rem;
             font-weight: bold;
-            color: #006643;
-            margin: 40px 0;
-            padding: 35px;
-            background: #e9f5f0;
-            border-radius: 14px;
-            letter-spacing: 3px;
+            color: #ffc107;
+            margin-bottom: 15px;
+            line-height: 1.1;
+            word-break: break-all;
         }
+
         .msg-primary {
-            font-size: 26px;
-            color: #333;
+            font-size: 2.2rem;
+            color: #ffffff;
             font-weight: bold;
-            margin-top: 30px;
-        }
-        .msg-secondary {
-            font-size: 20px;
-            color: #777;
             margin-top: 15px;
-            font-weight: 500;
         }
+
+        .msg-secondary {
+            font-size: 1.4rem;
+            color: #38bdf8;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+
         /* تأثيرات الوميض والاهتزاز عند حلول الدور */
         @keyframes flashAlert {
-            0% { background-color: white; border-color: #d9534f; }
-            50% { background-color: #fde8e8; border-color: #d9534f; }
-            100% { background-color: white; border-color: #d9534f; }
+            0% { background-color: #151c2c; border-color: #d9534f; }
+            50% { background-color: #451a1a; border-color: #d9534f; }
+            100% { background-color: #151c2c; border-color: #d9534f; }
         }
         @keyframes shakeAlert {
             0% { transform: translate(2px, 1px) rotate(0deg); }
@@ -97,48 +110,49 @@
         .alert-active {
             animation: flashAlert 0.8s infinite, shakeAlert 0.4s infinite;
         }
-        .alert-active .ticket-box {
-            background-color: #d9534f;
-            color: white;
+        .alert-active .display-number {
+            color: #ff6b6b;
         }
+
         .btn-stop {
             display: none;
-            margin-top: 40px;
-            padding: 16px 40px;
-            font-size: 20px;
+            margin-top: 25px;
+            padding: 14px 40px;
+            font-size: 1.2rem;
             background-color: #d9534f;
             color: white;
             border: none;
             border-radius: 12px;
             cursor: pointer;
             font-weight: bold;
-            box-shadow: 0 4px 10px rgba(217, 83, 79, 0.4);
-            transition: background 0.3s;
+            box-shadow: 0 4px 15px rgba(217, 83, 79, 0.4);
+            transition: 0.3s;
         }
         .btn-stop:hover {
             background-color: #c9302c;
         }
     </style>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
 
-    <!-- الهيدر طبقاً لرسمتك: الشعار يمين، واسم المركز يسار -->
+    <!-- الهيدر: الشعار يمين واسم المركز يسار تماماً مثل نظام النداء -->
     <div class="header">
         <div class="logo-container">
-            <img src="https://github.com/blu2ris-create/clinic-queue-system/blob/main/logo.png%20(2).png?raw=true" alt="شعار تجمع الأحساء الصحي">
+            <img src="https://github.com/blu2ris-create/clinic-queue-system/blob/main/logo.png%20(2).png?raw=true" alt="شعار تجمع الأحساء الصحي" class="cluster-logo">
         </div>
         <div class="center-title">مركز العمران للرعاية الأولية</div>
     </div>
 
-    <!-- محتوى الصفحة -->
+    <!-- محتوى الشاشة -->
     <div class="main-content">
-        <div class="container" id="mainContainer">
-            <div class="ticket-box" id="currentNumber">جاري الانتظار...</div>
+        <div class="display-box" id="mainContainer">
+            <div class="display-number" id="currentNumber">جاري الانتظار...</div>
             <div class="msg-primary" id="msgPrimary">اسم الله عليك ما تشوف شر</div>
             <div class="msg-secondary" id="msgSecondary">اشغل وقتك بالدعاء لين ما يجي دورك</div>
-            
-            <button class="btn-stop" id="stopBtn" onclick="stopAlert()">فهمت / إيقاف التنبيه</button>
         </div>
+        
+        <button class="btn-stop" id="stopBtn" onclick="stopAlert()">فهمت / إيقاف التنبيه</button>
     </div>
 
     <script>
@@ -155,7 +169,10 @@
             
             container.classList.add('alert-active');
             stopBtn.style.display = 'inline-block';
-            if (navigator.vibrate) navigator.vibrate([800, 400, 800, 400, 800]);
+            
+            if (navigator.vibrate) {
+                navigator.vibrate([800, 400, 800, 400, 800]);
+            }
         }
 
         function stopAlert() {
