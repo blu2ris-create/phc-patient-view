@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>شاشة انتظار المراجع - مركز صحي العمران للرعاية الأولية</title>
     
-    <!-- إعدادات PWA لتجربة التطبيق الكامل -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0b0f19">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -27,7 +26,6 @@
             padding: env(safe-area-inset-top, 10px) 15px env(safe-area-inset-bottom, 10px) 15px;
         }
 
-        /* الهيدر المدمج بدون هوامش مبالغ فيها */
         .app-header {
             width: 100%;
             display: flex;
@@ -56,7 +54,6 @@
             color: #94a3b8;
         }
 
-        /* صندوق العرض المركزي المتجاوب */
         .main-container {
             flex: 1;
             width: 100%;
@@ -104,7 +101,6 @@
             font-weight: bold;
         }
 
-        /* زر إيقاف التنبيه */
         .btn-stop {
             display: none;
             margin-top: 15px;
@@ -120,7 +116,6 @@
             transition: 0.3s;
         }
 
-        /* شاشة التفعيل الإجبارية */
         #activationOverlay {
             position: fixed;
             top: 0;
@@ -137,15 +132,29 @@
         .welcome-card {
             background: #151c2c;
             border: 2px solid #2a344d;
-            padding: 30px 20px;
+            padding: 25px 20px;
             border-radius: 24px;
             text-align: center;
             width: 100%;
             max-width: 400px;
             box-shadow: 0 15px 35px rgba(0,0,0,0.8);
         }
+        .user-input {
+            width: 100%;
+            padding: 14px;
+            font-size: 1.2rem;
+            text-align: center;
+            background: #0b0f19;
+            border: 2px solid #38bdf8;
+            color: white;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            outline: none;
+        }
+        .user-input:focus {
+            border-color: #ffc107;
+        }
 
-        /* تأثيرات التنبيه (وميض واهتزاز) */
         @keyframes flashAlert {
             0% { background-color: #151c2c; border-color: #d9534f; }
             50% { background-color: #451a1a; border-color: #d9534f; }
@@ -178,27 +187,25 @@
 </head>
 <body>
 
-    <!-- نافذة البدء وتفعيل الشاشة -->
     <div id="activationOverlay">
         <div class="welcome-card">
-            <h3 style="color: #ffc107; font-weight: bold; margin-bottom: 12px; font-size: 1.4rem;">شاشة متابعة المراجع</h3>
-            <p style="color: #94a3b8; font-size: 0.95rem; margin-bottom: 25px; line-height: 1.5;">اضغط لتفعيل التنبيهات ومنع شاشة الجوال من الإغلاق أثناء الانتظار</p>
-            <button onclick="activateSystem()" style="background: #ffc107; color: #0b0f19; border: none; padding: 14px 20px; font-size: 1.1rem; font-weight: bold; border-radius: 14px; width: 100%; cursor: pointer; box-shadow: 0 5px 15px rgba(255,193,7,0.3);">تفعيل وبدء المتابعة 🚀</button>
+            <h3 style="color: #ffc107; font-weight: bold; margin-bottom: 10px; font-size: 1.3rem;">تسجيل تذكرة المراجع</h3>
+            <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 20px; line-height: 1.4;">أدخل رقم أو اسم التذكرة الخاص بك لكي يصلك التنبيه والاهتزاز:</p>
+            <input type="text" id="patientIdentifier" class="user-input" placeholder="مثال: A-101 أو أحمد" autocomplete="off">
+            <button onclick="activateSystem()" style="background: #ffc107; color: #0b0f19; border: none; padding: 14px 20px; font-size: 1.1rem; font-weight: bold; border-radius: 14px; width: 100%; cursor: pointer; box-shadow: 0 5px 15px rgba(255,193,7,0.3);">بدء المتابعة وتفعيل التنبيه 🚀</button>
         </div>
     </div>
 
-    <!-- الهيدر العلوي التطبيقي -->
     <div class="app-header">
         <img src="https://github.com/blu2ris-create/clinic-queue-system/blob/main/logo.png%20(2).png?raw=true" alt="شعار التجمع" class="cluster-logo">
         <div class="center-title">مركز صحي العمران<br><span>للرعاية الأولية</span></div>
     </div>
 
-    <!-- محتوى الشاشة الرئيسي المتجاوب -->
     <div class="main-container">
         <div class="display-box" id="mainContainer">
             <div class="display-number" id="currentNumber">--</div>
-            <div class="msg-primary" id="msgPrimary">اسم الله عليك ما تشوف شر</div>
-            <div class="msg-secondary" id="msgSecondary">اشغل وقتك بالدعاء لين ما يجي دورك</div>
+            <div class="msg-primary" id="msgPrimary">في الانتظار...</div>
+            <div class="msg-secondary" id="msgSecondary">رقمك المسجل: <span id="myTagDisplay" style="color: #ffc107;">--</span></div>
         </div>
         <button class="btn-stop" id="stopBtn" onclick="stopAlert()">فهمت / إيقاف التنبيه</button>
     </div>
@@ -214,6 +221,7 @@
         const airportChimeSound = new Audio('https://github.com/blu2ris-create/clinic-queue-system/raw/refs/heads/main/mixkit-melodic-airport-announcement-ding-1570.mp3');
         airportChimeSound.volume = 1.0;
 
+        let myRegisteredNumber = "";
         let wakeLock = null;
 
         async function requestWakeLock() {
@@ -238,14 +246,34 @@
             if (topic === uniqueTopic) {
                 try {
                     const data = JSON.parse(message.toString());
-                    triggerYourTurn(data.name, data.clinic);
+                    const calledNum = String(data.name).trim().toLowerCase();
+                    const myNum = String(myRegisteredNumber).trim().toLowerCase();
+
+                    if (myNum && calledNum === myNum) {
+                        triggerYourTurn(data.name, data.clinic);
+                    }
                 } catch (e) {}
             }
         });
 
         function activateSystem() {
+            const inputVal = document.getElementById('patientIdentifier').value.trim();
+            if (!inputVal) {
+                alert('الرجاء إدخال رقم أو اسم التذكرة أولاً');
+                return;
+            }
+
+            myRegisteredNumber = inputVal;
+            document.getElementById('myTagDisplay').innerText = myRegisteredNumber;
             document.getElementById('activationOverlay').style.display = 'none';
+            
             requestWakeLock();
+
+            // اهتزاز تجريبي بسيط لحظة الضغط على زر التفعيل لتأكيد عمل الهزاز في الجهاز
+            if ("vibrate" in navigator) {
+                try { navigator.vibrate(200); } catch(e) {}
+            }
+
             airportChimeSound.play().then(() => {
                 airportChimeSound.pause();
                 airportChimeSound.currentTime = 0;
@@ -260,8 +288,8 @@
             const stopBtn = document.getElementById('stopBtn');
 
             numBox.innerText = patientName;
-            msgP.innerText = "حياك الله، وصل دورك للتو!";
-            msgS.innerText = `التوجه إلى: ${clinicName}`;
+            msgP.innerText = "وصل دورك تفضل";
+            msgS.innerText = `العيادة: ${clinicName}`;
             
             container.classList.add('alert-active');
             stopBtn.style.display = 'inline-block';
@@ -271,8 +299,11 @@
                 airportChimeSound.play().catch(e => {});
             } catch(e) {}
 
-            if (navigator.vibrate) {
-                navigator.vibrate([1000, 500, 1000, 500, 1000]);
+            // تشغيل الاهتزاز الحقيقي للجوال بشكل متكرر
+            if ("vibrate" in navigator) {
+                try {
+                    navigator.vibrate([500, 300, 500, 300, 500, 300, 800]);
+                } catch(e) {}
             }
         }
 
