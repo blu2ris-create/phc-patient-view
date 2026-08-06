@@ -26,7 +26,7 @@
             padding: 20px 30px;
         }
 
-        /* الهيدر: الشعار في أقصى اليمين، واسم المركز في أقصى اليسار تماماً مثل نظام النداء */
+        /* الهيدر: الشعار في أقصى اليمين، واسم المركز في أقصى اليسار */
         .header {
             display: flex;
             justify-content: space-between;
@@ -93,6 +93,22 @@
             font-weight: bold;
         }
 
+        /* شاشة التفعيل الأولية لتشغيل الصوتيات بالمتصفح */
+        #activationOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(7, 10, 17, 0.96);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            padding: 20px;
+        }
+
         /* تأثيرات الوميض والاهتزاز عند حلول الدور */
         @keyframes flashAlert {
             0% { background-color: #151c2c; border-color: #d9534f; }
@@ -133,15 +149,26 @@
         }
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap" rel="stylesheet">
+    <!-- مكتبة الاتصال اللحظي MQTT -->
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 </head>
 <body>
 
-    <!-- الهيدر: الشعار يمين واسم المركز يسار تماماً مثل نظام النداء -->
+    <!-- نافذة التفعيل الإجبارية لتشغيل التنبيهات الصوتية في الجوال -->
+    <div id="activationOverlay">
+        <div class="text-center bg-dark p-4 rounded-4 shadow-lg border border-secondary" style="max-width: 450px;">
+            <h3 class="text-warning fw-bold mb-3">شاشة متابعة دور المراجع</h3>
+            <p class="text-light mb-4 small">اضغط الزر أدناه لتفعيل التنبيهات الصوتية والربط المباشر مع نظام النداء</p>
+            <button class="btn btn-warning btn-lg fw-bold px-4 py-3 rounded-pill w-100" onclick="activateSystem()">تفعيل النظام وبدء الاستماع 🔊</button>
+        </div>
+    </div>
+
+    <!-- الهيدر: الشعار يمين واسم المركز يسار -->
     <div class="header">
         <div class="logo-container">
             <img src="https://github.com/blu2ris-create/clinic-queue-system/blob/main/logo.png%20(2).png?raw=true" alt="شعار تجمع الأحساء الصحي" class="cluster-logo">
         </div>
-        <div class="center-title">مركز العمران للرعاية الأولية</div>
+        <div class="center-title">مركز صحي العمران للرعاية الأولية</div>
     </div>
 
     <!-- محتوى الشاشة -->
@@ -156,22 +183,60 @@
     </div>
 
     <script>
-        function triggerYourTurn(ticketNumber) {
+        // إعدادات الاتصال المباشر بنظام النداء
+        const brokerUrl = 'wss://broker.hivemq.com:8884/mqtt';
+        const uniqueTopic = 'umran_health_cluster_ksa_2026_secure_calls';
+        const clientId = 'client_reviewer_' + Math.random().toString(16).substr(2, 8);
+        const client = mqtt.connect(brokerUrl, { clientId: clientId });
+
+        const airportChimeSound = new Audio('https://github.com/blu2ris-create/clinic-queue-system/raw/refs/heads/main/mixkit-melodic-airport-announcement-ding-1570.mp3');
+        airportChimeSound.volume = 1.0;
+
+        client.on('connect', () => {
+            client.subscribe(uniqueTopic);
+        });
+
+        client.on('message', (topic, message) => {
+            if (topic === uniqueTopic) {
+                try {
+                    const data = JSON.parse(message.toString());
+                    triggerYourTurn(data.name, data.clinic);
+                } catch (e) {}
+            }
+        });
+
+        function activateSystem() {
+            document.getElementById('activationOverlay').style.display = 'none';
+            // تشغيل صوت صامت لتجاوز قيود المتصفح للأجهزة الذكية
+            airportChimeSound.play().then(() => {
+                airportChimeSound.pause();
+                airportChimeSound.currentTime = 0;
+            }).catch(e => {});
+        }
+
+        function triggerYourTurn(patientName, clinicName) {
             const container = document.getElementById('mainContainer');
             const numBox = document.getElementById('currentNumber');
             const msgP = document.getElementById('msgPrimary');
             const msgS = document.getElementById('msgSecondary');
             const stopBtn = document.getElementById('stopBtn');
 
-            numBox.innerText = ticketNumber;
+            numBox.innerText = patientName;
             msgP.innerText = "حياك الله، وصل دورك للتو!";
-            msgS.innerText = "الرجاء التوجه إلى العيادة المطلوبة فوراً";
+            msgS.innerText = `التوجه إلى: ${clinicName}`;
             
             container.classList.add('alert-active');
             stopBtn.style.display = 'inline-block';
             
+            // تشغيل النغمة التنبيهية
+            try {
+                airportChimeSound.currentTime = 0;
+                airportChimeSound.play().catch(e => {});
+            } catch(e) {}
+
+            // اهتزاز الهاتف
             if (navigator.vibrate) {
-                navigator.vibrate([800, 400, 800, 400, 800]);
+                navigator.vibrate([1000, 500, 1000, 500, 1000]);
             }
         }
 
