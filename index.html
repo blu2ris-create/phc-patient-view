@@ -2,10 +2,10 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>شاشة انتظار المراجع - مركز صحي العمران للرعاية الأولية</title>
     
-    <!-- إعدادات PWA لتشغيله كبرنامج مستقل -->
+    <!-- إعدادات PWA لتجربة التطبيق الكامل -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0b0f19">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -13,115 +13,150 @@
 
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
+        html, body {
             background-color: #0b0f19;
             color: white;
             font-family: 'Cairo', sans-serif;
-            height: 100vh;
             width: 100vw;
+            height: 100dvh;
             overflow: hidden;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            padding: 20px 30px;
+            align-items: center;
+            padding: env(safe-area-inset-top, 10px) 15px env(safe-area-inset-bottom, 10px) 15px;
         }
 
-        /* الهيدر: الشعار في أقصى اليمين، واسم المركز في أقصى اليسار */
-        .header {
+        /* الهيدر المدمج بدون هوامش مبالغ فيها */
+        .app-header {
+            width: 100%;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            width: 100%;
-            padding-bottom: 12px;
-            border-bottom: 2px solid #1e293b;
+            padding: 8px 10px;
+            background: rgba(21, 28, 44, 0.7);
+            border-radius: 16px;
+            border: 1px solid rgba(42, 52, 77, 0.5);
+            flex-shrink: 0;
         }
         .cluster-logo {
-            height: 90px;
+            height: 50px;
             width: auto;
             object-fit: contain;
-            background: transparent;
         }
         .center-title {
-            font-size: 1.8rem;
+            font-size: 1.1rem;
             font-weight: bold;
             color: #ffc107;
             text-align: left;
+            line-height: 1.2;
+        }
+        .center-title span {
+            font-size: 0.8rem;
+            color: #94a3b8;
         }
 
-        /* محتوى شاشة المراجع */
-        .main-content {
+        /* صندوق العرض المركزي المتجاوب */
+        .main-container {
             flex: 1;
+            width: 100%;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             text-align: center;
+            padding: 10px 0;
         }
 
         .display-box {
             background: #151c2c;
             border: 2px solid #2a344d;
-            border-radius: 25px;
-            padding: 50px 40px;
-            text-align: center;
+            border-radius: 24px;
+            padding: 25px 15px;
             width: 100%;
-            max-width: 750px;
-            box-shadow: 0 15px 35px rgba(0,0,0,0.6);
-            margin-bottom: 25px;
+            max-width: 500px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
         }
 
         .display-number {
-            font-size: 6rem;
+            font-size: clamp(3.5rem, 15vw, 5.5rem);
             font-weight: bold;
             color: #ffc107;
-            margin-bottom: 15px;
             line-height: 1.1;
+            margin-bottom: 10px;
             word-break: break-all;
         }
 
         .msg-primary {
-            font-size: 2.2rem;
+            font-size: clamp(1.2rem, 5vw, 1.6rem);
             color: #ffffff;
             font-weight: bold;
-            margin-top: 15px;
+            margin-bottom: 8px;
         }
 
         .msg-secondary {
-            font-size: 1.4rem;
+            font-size: clamp(0.95rem, 4vw, 1.15rem);
             color: #38bdf8;
-            margin-top: 10px;
             font-weight: bold;
         }
 
-        /* شاشة التفعيل الأولية لتشغيل الصوتيات بالمتصفح */
+        /* زر إيقاف التنبيه */
+        .btn-stop {
+            display: none;
+            margin-top: 15px;
+            padding: 12px 30px;
+            font-size: 1.1rem;
+            background-color: #d9534f;
+            color: white;
+            border: none;
+            border-radius: 14px;
+            cursor: pointer;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(217, 83, 79, 0.4);
+            transition: 0.3s;
+        }
+
+        /* شاشة التفعيل الإجبارية */
         #activationOverlay {
             position: fixed;
             top: 0;
             left: 0;
             width: 100vw;
-            height: 100vh;
-            background: rgba(7, 10, 17, 0.96);
+            height: 100dvh;
+            background: #0b0f19;
             z-index: 9999;
             display: flex;
             justify-content: center;
             align-items: center;
-            flex-direction: column;
             padding: 20px;
         }
+        .welcome-card {
+            background: #151c2c;
+            border: 2px solid #2a344d;
+            padding: 30px 20px;
+            border-radius: 24px;
+            text-align: center;
+            width: 100%;
+            max-width: 400px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.8);
+        }
 
-        /* تأثيرات الوميض والاهتزاز عند حلول الدور */
+        /* تأثيرات التنبيه (وميض واهتزاز) */
         @keyframes flashAlert {
             0% { background-color: #151c2c; border-color: #d9534f; }
             50% { background-color: #451a1a; border-color: #d9534f; }
             100% { background-color: #151c2c; border-color: #d9534f; }
         }
         @keyframes shakeAlert {
-            0% { transform: translate(2px, 1px) rotate(0deg); }
-            20% { transform: translate(-2px, -1px) rotate(1deg); }
-            40% { transform: translate(3px, 0px) rotate(-1deg); }
-            60% { transform: translate(-3px, 1px) rotate(0deg); }
-            80% { transform: translate(2px, -1px) rotate(-1deg); }
-            100% { transform: translate(2px, 1px) rotate(0deg); }
+            0% { transform: translate(2px, 1px); }
+            20% { transform: translate(-2px, -1px); }
+            40% { transform: translate(3px, 0px); }
+            60% { transform: translate(-3px, 1px); }
+            100% { transform: translate(2px, 1px); }
         }
         .alert-active {
             animation: flashAlert 0.8s infinite, shakeAlert 0.4s infinite;
@@ -130,60 +165,47 @@
             color: #ff6b6b;
         }
 
-        .btn-stop {
-            display: none;
-            margin-top: 25px;
-            padding: 14px 40px;
-            font-size: 1.2rem;
-            background-color: #d9534f;
-            color: white;
-            border: none;
-            border-radius: 12px;
-            cursor: pointer;
-            font-weight: bold;
-            box-shadow: 0 4px 15px rgba(217, 83, 79, 0.4);
-            transition: 0.3s;
-        }
-        .btn-stop:hover {
-            background-color: #c9302c;
+        .footer-note {
+            font-size: 0.75rem;
+            color: #475569;
+            text-align: center;
+            flex-shrink: 0;
+            padding-bottom: 5px;
         }
     </style>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap" rel="stylesheet">
-    <!-- مكتبة الاتصال اللحظي MQTT -->
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 </head>
 <body>
 
-    <!-- نافذة التفعيل الإجبارية لتشغيل التنبيهات الصوتية في الجوال -->
+    <!-- نافذة البدء وتفعيل الشاشة -->
     <div id="activationOverlay">
-        <div class="text-center bg-dark p-4 rounded-4 shadow-lg border border-secondary" style="max-width: 450px;">
-            <h3 class="text-warning fw-bold mb-3">شاشة متابعة دور المراجع</h3>
-            <p class="text-light mb-4 small">اضغط الزر أدناه لتفعيل التنبيهات الصوتية والربط المباشر مع نظام النداء</p>
-            <button class="btn btn-warning btn-lg fw-bold px-4 py-3 rounded-pill w-100" onclick="activateSystem()">تفعيل النظام وبدء الاستماع 🔊</button>
+        <div class="welcome-card">
+            <h3 style="color: #ffc107; font-weight: bold; margin-bottom: 12px; font-size: 1.4rem;">شاشة متابعة المراجع</h3>
+            <p style="color: #94a3b8; font-size: 0.95rem; margin-bottom: 25px; line-height: 1.5;">اضغط لتفعيل التنبيهات ومنع شاشة الجوال من الإغلاق أثناء الانتظار</p>
+            <button onclick="activateSystem()" style="background: #ffc107; color: #0b0f19; border: none; padding: 14px 20px; font-size: 1.1rem; font-weight: bold; border-radius: 14px; width: 100%; cursor: pointer; box-shadow: 0 5px 15px rgba(255,193,7,0.3);">تفعيل وبدء المتابعة 🚀</button>
         </div>
     </div>
 
-    <!-- الهيدر: الشعار يمين واسم المركز يسار -->
-    <div class="header">
-        <div class="logo-container">
-            <img src="https://github.com/blu2ris-create/clinic-queue-system/blob/main/logo.png%20(2).png?raw=true" alt="شعار تجمع الأحساء الصحي" class="cluster-logo">
-        </div>
-        <div class="center-title">مركز صحي العمران للرعاية الأولية</div>
+    <!-- الهيدر العلوي التطبيقي -->
+    <div class="app-header">
+        <img src="https://github.com/blu2ris-create/clinic-queue-system/blob/main/logo.png%20(2).png?raw=true" alt="شعار التجمع" class="cluster-logo">
+        <div class="center-title">مركز صحي العمران<br><span>للرعاية الأولية</span></div>
     </div>
 
-    <!-- محتوى الشاشة -->
-    <div class="main-content">
+    <!-- محتوى الشاشة الرئيسي المتجاوب -->
+    <div class="main-container">
         <div class="display-box" id="mainContainer">
-            <div class="display-number" id="currentNumber">جاري الانتظار...</div>
+            <div class="display-number" id="currentNumber">--</div>
             <div class="msg-primary" id="msgPrimary">اسم الله عليك ما تشوف شر</div>
             <div class="msg-secondary" id="msgSecondary">اشغل وقتك بالدعاء لين ما يجي دورك</div>
         </div>
-        
         <button class="btn-stop" id="stopBtn" onclick="stopAlert()">فهمت / إيقاف التنبيه</button>
     </div>
 
+    <div class="footer-note">نظام النداء الآلي © 2026</div>
+
     <script>
-        // إعدادات الاتصال المباشر بنظام النداء
         const brokerUrl = 'wss://broker.hivemq.com:8884/mqtt';
         const uniqueTopic = 'umran_health_cluster_ksa_2026_secure_calls';
         const clientId = 'client_reviewer_' + Math.random().toString(16).substr(2, 8);
@@ -191,6 +213,22 @@
 
         const airportChimeSound = new Audio('https://github.com/blu2ris-create/clinic-queue-system/raw/refs/heads/main/mixkit-melodic-airport-announcement-ding-1570.mp3');
         airportChimeSound.volume = 1.0;
+
+        let wakeLock = null;
+
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                }
+            } catch (err) {}
+        }
+
+        document.addEventListener('visibilitychange', async () => {
+            if (wakeLock !== null && document.visibilityState === 'visible') {
+                await requestWakeLock();
+            }
+        });
 
         client.on('connect', () => {
             client.subscribe(uniqueTopic);
@@ -207,7 +245,7 @@
 
         function activateSystem() {
             document.getElementById('activationOverlay').style.display = 'none';
-            // تشغيل صوت صامت لتجاوز قيود المتصفح للأجهزة الذكية
+            requestWakeLock();
             airportChimeSound.play().then(() => {
                 airportChimeSound.pause();
                 airportChimeSound.currentTime = 0;
@@ -228,13 +266,11 @@
             container.classList.add('alert-active');
             stopBtn.style.display = 'inline-block';
             
-            // تشغيل النغمة التنبيهية
             try {
                 airportChimeSound.currentTime = 0;
                 airportChimeSound.play().catch(e => {});
             } catch(e) {}
 
-            // اهتزاز الهاتف
             if (navigator.vibrate) {
                 navigator.vibrate([1000, 500, 1000, 500, 1000]);
             }
@@ -247,6 +283,5 @@
             stopBtn.style.display = 'none';
         }
     </script>
-
 </body>
 </html>
