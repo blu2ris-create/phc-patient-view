@@ -1,14 +1,19 @@
 {
-  "name": "نظام انتظار المراجعين - تجمع الأحساء الصحي",
-  "short_name": "النداء الآلي",
-  "start_url": "./index.html",
+  "name": "شاشة انتظار المراجع - مركز العمران",
+  "short_name": "انتظار العمران",
+  "start_url": "index.html",
   "display": "standalone",
-  "background_color": "#f4f7f6",
-  "theme_color": "#006643",
+  "background_color": "#0b0f19",
+  "theme_color": "#0b0f19",
   "icons": [
     {
-      "src": "https://i.ibb.co/6y40q84/logo.png",
+      "src": "https://github.com/blu2ris-create/clinic-queue-system/blob/main/logo.png%20(2).png?raw=true",
       "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://github.com/blu2ris-create/clinic-queue-system/blob/main/logo.png%20(2).png?raw=true",
+      "sizes": "512x512",
       "type": "image/png"
     }
   ]
