@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>شاشة المراجع - مركز صحي الصالحية</title>
+    <title>شاشة المراجع - مركز صحي الصالحية للرعاية الأولية</title>
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <meta name="theme-color" content="#0b0f19">
@@ -40,6 +40,16 @@
             object-fit: contain;
         }
 
+        .center-heading {
+            font-size: clamp(1.4rem, 5vw, 1.8rem);
+            font-weight: bold;
+            color: #ffc107;
+            text-align: center;
+            letter-spacing: 0.5px;
+            width: 100%;
+            margin-top: 5px;
+        }
+
         .main-container {
             flex: 1;
             width: 100%;
@@ -49,17 +59,6 @@
             align-items: center;
             text-align: center;
             padding: 5px 0;
-        }
-
-        /* اسم المركز الصحي في المنتصف تماماً بين شعار التجمع ومربع رقم المريض */
-        .center-heading {
-            font-size: clamp(1.5rem, 5.5vw, 2rem);
-            font-weight: bold;
-            color: #ffc107;
-            text-align: center;
-            letter-spacing: 0.5px;
-            margin-bottom: 25px;
-            width: 100%;
         }
 
         .display-box {
@@ -186,23 +185,20 @@
 
     <div id="activationOverlay">
         <div class="welcome-card">
-            <h3 style="color: #ffc107; font-weight: bold; margin-bottom: 5px; font-size: 1.2rem;">مركز صحي الصالحية</h3>
+            <h3 style="color: #ffc107; font-weight: bold; margin-bottom: 5px; font-size: 1.2rem;">مركز صحي الصالحية للرعاية الأولية</h3>
             <p style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 20px; line-height: 1.4;">أدخل رقم التذكرة الخاص بك لكي يصلك النداء الصوتي والاهتزاز:</p>
             <input type="number" id="patientIdentifier" class="user-input" placeholder="مثال: 46" autocomplete="off">
             <button onclick="activateSystem()" style="background: #ffc107; color: #0b0f19; border: none; padding: 14px 20px; font-size: 1.1rem; font-weight: bold; border-radius: 14px; width: 100%; cursor: pointer; box-shadow: 0 5px 15px rgba(255,193,7,0.3);">بدء المتابعة وتفعيل النظام 🚀</button>
         </div>
     </div>
 
-    <!-- الهيدر العلوي يضم فقط شعار التجمع الصحي في اليسار -->
     <div class="app-header">
-        <div></div>
+        <div style="width: 50px;"></div>
+        <div class="center-heading">مركز صحي الصالحية للرعاية الأولية</div>
         <img src="https://github.com/blu2ris-create/clinic-queue-system/blob/main/logo.png%20(2).png?raw=true" alt="شعار التجمع" class="cluster-logo">
     </div>
 
     <div class="main-container">
-        <!-- اسم المركز الصحي في المنتصف تماماً فوق مربع رقم المريض -->
-        <div class="center-heading">مركز صحي الصالحية</div>
-
         <div class="display-box" id="mainContainer">
             <div class="display-number" id="currentNumber">--</div>
             <div class="msg-primary" id="msgPrimary">في الانتظار...</div>
@@ -258,7 +254,7 @@
             }
         });
 
-        function activateSystem() {
+        async function activateSystem() {
             const inputVal = document.getElementById('patientIdentifier').value.trim();
             if (!inputVal) {
                 alert('الرجاء إدخال رقم التذكرة أولاً');
@@ -275,11 +271,12 @@
             
             requestWakeLock();
 
+            // تهيئة AudioContext تماماً مثل الشاشة الرئيسية لفك حظر الصوت في الجوال
             try {
                 const AudioContext = window.AudioContext || window.webkitAudioContext;
                 audioCtx = new AudioContext();
                 if (audioCtx.state === 'suspended') {
-                    audioCtx.resume();
+                    await audioCtx.resume();
                 }
             } catch (e) {}
 
@@ -287,9 +284,11 @@
                 try { navigator.vibrate(200); } catch(e) {}
             }
 
+            // التحميل المسبق لملفات الصوت الأساسية من المستودع
             preloadAudioBuffers(["ding.mp3", "please_wait.mp3", "goto.mp3"]);
         }
 
+        // نفس دالة قص الصمت المطورة الموجودة في الشاشة الرئيسية
         function trimSilence(buffer) {
             const channel = buffer.getChannelData(0);
             const threshold = 0.02;
@@ -311,7 +310,7 @@
             if (startIdx >= endIdx) return buffer;
 
             const newBuffer = audioCtx.createBuffer(buffer.numberOfChannels, endIdx - startIdx, buffer.sampleRate);
-            for (let c = 0; c < numberOfChannels; c++) {
+            for (let c = 0; c < buffer.numberOfChannels; c++) {
                 const oldData = buffer.getChannelData(c);
                 const newData = newBuffer.getChannelData(c);
                 for (let i = 0; i < newBuffer.length; i++) {
@@ -336,13 +335,18 @@
         }
 
         async function preloadAudioBuffers(fileNames) {
+            if (!audioCtx) return;
             for (const file of fileNames) {
                 await loadAudioBuffer(file);
             }
         }
 
+        // دالة دمج وتشغيل الصوتيات من مستودع جيتهاب بدون أي فجوات تماماً كالرئيسية
         async function playMergedSequence(fileList) {
-            if (!audioCtx) return;
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContext();
+            }
             if (audioCtx.state === 'suspended') {
                 await audioCtx.resume();
             }
@@ -395,6 +399,7 @@
             container.classList.add('alert-active');
             stopBtn.style.display = 'inline-block';
             
+            // تشغيل نفس سلسلة ملفات الصوت من مستودع جيتهاب تلقائياً
             try {
                 const patientAudio = data.patientAudioFile || (data.patientNumber + '.mp3');
                 const clinicAudio = data.clinicAudioFile || 'lab.mp3';
@@ -412,9 +417,10 @@
                 await playMergedSequence(sequence);
             } catch(e) {}
 
+            // تفعيل الاهتزاز المتكرر للجوال
             if ("vibrate" in navigator) {
                 try {
-                    navigator.vibrate([500, 300, 500, 300, 500, 300, 800]);
+                    navigator.vibrate([600, 300, 600, 300, 600, 300, 1000]);
                 } catch(e) {}
             }
         }
