@@ -26,10 +26,11 @@
             padding: env(safe-area-inset-top, 15px) 15px env(safe-area-inset-bottom, 15px) 15px;
         }
 
+        /* الهيدر العلوي يضم الشعار في اليسار واسم المركز في المنتصف للأعلى */
         .app-header {
             width: 100%;
             display: flex;
-            justify-content: flex-end;
+            justify-content: space-between;
             align-items: center;
             padding: 5px 10px;
             flex-shrink: 0;
@@ -38,6 +39,17 @@
             height: 50px;
             width: auto;
             object-fit: contain;
+        }
+
+        /* اسم المركز الصحي في المنتصف العلوي تماماً كما طلبت */
+        .center-heading {
+            font-size: clamp(1.4rem, 5vw, 1.8rem);
+            font-weight: bold;
+            color: #ffc107;
+            text-align: center;
+            letter-spacing: 0.5px;
+            width: 100%;
+            margin-top: 10px;
         }
 
         .main-container {
@@ -49,16 +61,6 @@
             align-items: center;
             text-align: center;
             padding: 5px 0;
-        }
-
-        /* عنوان المركز الصحي فوق مربع الانتظار تماماً */
-        .center-heading {
-            font-size: clamp(1.4rem, 5vw, 1.8rem);
-            font-weight: bold;
-            color: #ffc107;
-            margin-bottom: 15px;
-            text-align: center;
-            letter-spacing: 0.5px;
         }
 
         .display-box {
@@ -192,15 +194,14 @@
         </div>
     </div>
 
-    <!-- شعار التجمع الصحي في اليسار -->
+    <!-- الهيدر العلوي: شعار التجمع في اليسار وبجانبه اسم المركز في الأعلى -->
     <div class="app-header">
+        <div style="width: 50px;"></div> <!-- عنصر موازن لضبط توسيط اسم المركز -->
+        <div class="center-heading">مركز صحي الصالحية</div>
         <img src="https://github.com/blu2ris-create/clinic-queue-system/blob/main/logo.png%20(2).png?raw=true" alt="شعار التجمع" class="cluster-logo">
     </div>
 
     <div class="main-container">
-        <!-- اسم المركز الصحي فوق مربع الانتظار -->
-        <div class="center-heading">مركز صحي الصالحية</div>
-
         <div class="display-box" id="mainContainer">
             <div class="display-number" id="currentNumber">--</div>
             <div class="msg-primary" id="msgPrimary">في الانتظار...</div>
@@ -265,158 +266,4 @@
 
             myRegisteredNumber = inputVal;
             document.getElementById('myTagDisplay').innerText = myRegisteredNumber;
-            document.getElementById('activationOverlay').style.display = 'none';
-            
-            requestWakeLock();
-
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
-            audioCtx = new AudioContext();
-            if (audioCtx.state === 'suspended') {
-                await audioCtx.resume();
-            }
-
-            if ("vibrate" in navigator) {
-                try { navigator.vibrate(200); } catch(e) {}
-            }
-
-            preloadAudioBuffers(["ding.mp3", "please_wait.mp3", "goto.mp3"]);
-        }
-
-        function trimSilence(buffer) {
-            const channel = buffer.getChannelData(0);
-            const threshold = 0.02;
-            let startIdx = 0;
-            let endIdx = channel.length - 1;
-
-            for (let i = 0; i < channel.length; i++) {
-                if (Math.abs(channel[i]) > threshold) {
-                    startIdx = Math.max(0, i - 10);
-                    break;
-                }
-            }
-            for (let i = channel.length - 1; i >= 0; i--) {
-                if (Math.abs(channel[i]) > threshold) {
-                    endIdx = Math.min(channel.length - 1, i + 10);
-                    break;
-                }
-            }
-            if (startIdx >= endIdx) return buffer;
-
-            const newBuffer = audioCtx.createBuffer(buffer.numberOfChannels, endIdx - startIdx, buffer.sampleRate);
-            for (let c = 0; c < buffer.numberOfChannels; c++) {
-                const oldData = buffer.getChannelData(c);
-                const newData = newBuffer.getChannelData(c);
-                for (let i = 0; i < newBuffer.length; i++) {
-                    newData[i] = oldData[startIdx + i];
-                }
-            }
-            return newBuffer;
-        }
-
-        async function loadAudioBuffer(fileName) {
-            if (audioBufferCache[fileName]) return audioBufferCache[fileName];
-            try {
-                const response = await fetch(voicesBaseUrl + fileName);
-                const arrayBuffer = await response.arrayBuffer();
-                let decodedBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-                decodedBuffer = trimSilence(decodedBuffer);
-                audioBufferCache[fileName] = decodedBuffer;
-                return decodedBuffer;
-            } catch (e) {
-                return null;
-            }
-        }
-
-        async function preloadAudioBuffers(fileNames) {
-            for (const file of fileNames) {
-                await loadAudioBuffer(file);
-            }
-        }
-
-        async function playMergedSequence(fileList) {
-            if (!audioCtx) return;
-            if (audioCtx.state === 'suspended') {
-                await audioCtx.resume();
-            }
-
-            let loadedBuffers = [];
-            let totalLength = 0;
-            let sampleRate = audioCtx.sampleRate;
-            let numberOfChannels = 1;
-
-            for (const file of fileList) {
-                let buffer = await loadAudioBuffer(file);
-                if (buffer) {
-                    loadedBuffers.push(buffer);
-                    totalLength += buffer.length;
-                    sampleRate = buffer.sampleRate;
-                    numberOfChannels = Math.max(numberOfChannels, buffer.numberOfChannels);
-                }
-            }
-
-            if (loadedBuffers.length === 0) return;
-
-            const masterBuffer = audioCtx.createBuffer(numberOfChannels, totalLength, sampleRate);
-            for (let c = 0; c < numberOfChannels; c++) {
-                const masterData = masterBuffer.getChannelData(c);
-                let offset = 0;
-                for (const buf of loadedBuffers) {
-                    const sourceData = buf.getChannelData(c % buf.numberOfChannels);
-                    masterData.set(sourceData, offset);
-                    offset += buf.length;
-                }
-            }
-
-            const source = audioCtx.createBufferSource();
-            source.buffer = masterBuffer;
-            source.connect(audioCtx.destination);
-            source.start(0);
-        }
-
-        async function triggerYourTurn(data) {
-            const container = document.getElementById('mainContainer');
-            const numBox = document.getElementById('currentNumber');
-            const msgP = document.getElementById('msgPrimary');
-            const msgS = document.getElementById('msgSecondary');
-            const stopBtn = document.getElementById('stopBtn');
-
-            numBox.innerText = data.patientNumber;
-            msgP.innerText = "وصل دورك تفضل";
-            msgS.innerText = `التوجه إلى: ${data.clinicName}`;
-            
-            container.classList.add('alert-active');
-            stopBtn.style.display = 'inline-block';
-            
-            try {
-                const patientAudio = data.patientAudioFile || (data.patientNumber + '.mp3');
-                const clinicAudio = data.clinicAudioFile || 'lab.mp3';
-
-                await preloadAudioBuffers([patientAudio, clinicAudio]);
-
-                const sequence = [
-                    "ding.mp3",
-                    "please_wait.mp3",
-                    patientAudio,
-                    "goto.mp3",
-                    clinicAudio
-                ];
-
-                await playMergedSequence(sequence);
-            } catch(e) {}
-
-            if ("vibrate" in navigator) {
-                try {
-                    navigator.vibrate([500, 300, 500, 300, 500, 300, 800]);
-                } catch(e) {}
-            }
-        }
-
-        function stopAlert() {
-            const container = document.getElementById('mainContainer');
-            const stopBtn = document.getElementById('stopBtn');
-            container.classList.remove('alert-active');
-            stopBtn.style.display = 'none';
-        }
-    </script>
-</body>
-</html>
+            document.getElementById
