@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>شاشة انتظار المراجع - مركز صحي العمران للرعاية الأولية</title>
+    <title>نظام نداء المراجعين - مركز صحي الصالحية للرعاية الأولية</title>
     
-    <link rel="manifest" href="manifest.json">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <meta name="theme-color" content="#0b0f19">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -43,14 +43,14 @@
             object-fit: contain;
         }
         .center-title {
-            font-size: 1.1rem;
+            font-size: 1.05rem;
             font-weight: bold;
             color: #ffc107;
             text-align: left;
             line-height: 1.2;
         }
         .center-title span {
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             color: #94a3b8;
         }
 
@@ -189,16 +189,16 @@
 
     <div id="activationOverlay">
         <div class="welcome-card">
-            <h3 style="color: #ffc107; font-weight: bold; margin-bottom: 10px; font-size: 1.3rem;">تسجيل تذكرة المراجع</h3>
-            <p style="color: #94a3b8; font-size: 0.9rem; margin-bottom: 20px; line-height: 1.4;">أدخل رقم أو اسم التذكرة الخاص بك لكي يصلك التنبيه والاهتزاز:</p>
-            <input type="text" id="patientIdentifier" class="user-input" placeholder="مثال: A-101 أو أحمد" autocomplete="off">
-            <button onclick="activateSystem()" style="background: #ffc107; color: #0b0f19; border: none; padding: 14px 20px; font-size: 1.1rem; font-weight: bold; border-radius: 14px; width: 100%; cursor: pointer; box-shadow: 0 5px 15px rgba(255,193,7,0.3);">بدء المتابعة وتفعيل التنبيه 🚀</button>
+            <h3 style="color: #ffc107; font-weight: bold; margin-bottom: 5px; font-size: 1.2rem;">مركز صحي الصالحية للرعاية الأولية</h3>
+            <p style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 20px; line-height: 1.4;">أدخل رقم التذكرة الخاص بك لكي يصلك النداء الصوتي والاهتزاز:</p>
+            <input type="number" id="patientIdentifier" class="user-input" placeholder="مثال: 46" autocomplete="off">
+            <button onclick="activateSystem()" style="background: #ffc107; color: #0b0f19; border: none; padding: 14px 20px; font-size: 1.1rem; font-weight: bold; border-radius: 14px; width: 100%; cursor: pointer; box-shadow: 0 5px 15px rgba(255,193,7,0.3);">بدء المتابعة وتفعيل النظام 🚀</button>
         </div>
     </div>
 
     <div class="app-header">
-        <img src="https://github.com/blu2ris-create/clinic-queue-system/blob/main/logo.png%20(2).png?raw=true" alt="شعار التجمع" class="cluster-logo">
-        <div class="center-title">مركز صحي العمران<br><span>للرعاية الأولية</span></div>
+        <img src="https://github.com/blu2ris-create/clinic-queue-system/blob/main/logo.png%20(2).png?raw=true" alt="الشعار الرسمي" class="cluster-logo">
+        <div class="center-title">مركز صحي الصالحية<br><span>نظام نداء المراجعين الآلي</span></div>
     </div>
 
     <div class="main-container">
@@ -218,10 +218,11 @@
         const clientId = 'client_reviewer_' + Math.random().toString(16).substr(2, 8);
         const client = mqtt.connect(brokerUrl, { clientId: clientId });
 
-        const airportChimeSound = new Audio('https://github.com/blu2ris-create/clinic-queue-system/raw/refs/heads/main/mixkit-melodic-airport-announcement-ding-1570.mp3');
-        airportChimeSound.volume = 1.0;
-
+        const voicesBaseUrl = "https://raw.githubusercontent.com/blu2ris-create/health-cluster-audio/main/voices/";
+        
         let myRegisteredNumber = "";
+        let audioCtx = null;
+        let audioBufferCache = {};
         let wakeLock = null;
 
         async function requestWakeLock() {
@@ -246,20 +247,20 @@
             if (topic === uniqueTopic) {
                 try {
                     const data = JSON.parse(message.toString());
-                    const calledNum = String(data.name).trim().toLowerCase();
-                    const myNum = String(myRegisteredNumber).trim().toLowerCase();
+                    const calledNum = String(data.patientNumber || '').trim();
+                    const myNum = String(myRegisteredNumber).trim();
 
                     if (myNum && calledNum === myNum) {
-                        triggerYourTurn(data.name, data.clinic);
+                        triggerYourTurn(data);
                     }
                 } catch (e) {}
             }
         });
 
-        function activateSystem() {
+        async function activateSystem() {
             const inputVal = document.getElementById('patientIdentifier').value.trim();
             if (!inputVal) {
-                alert('الرجاء إدخال رقم أو اسم التذكرة أولاً');
+                alert('الرجاء إدخال رقم التذكرة أولاً');
                 return;
             }
 
@@ -269,37 +270,141 @@
             
             requestWakeLock();
 
-            // اهتزاز تجريبي بسيط لحظة الضغط على زر التفعيل لتأكيد عمل الهزاز في الجهاز
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            audioCtx = new AudioContext();
+            if (audioCtx.state === 'suspended') {
+                await audioCtx.resume();
+            }
+
             if ("vibrate" in navigator) {
                 try { navigator.vibrate(200); } catch(e) {}
             }
 
-            airportChimeSound.play().then(() => {
-                airportChimeSound.pause();
-                airportChimeSound.currentTime = 0;
-            }).catch(e => {});
+            preloadAudioBuffers(["ding.mp3", "please_wait.mp3", "goto.mp3"]);
         }
 
-        function triggerYourTurn(patientName, clinicName) {
+        function trimSilence(buffer) {
+            const channel = buffer.getChannelData(0);
+            const threshold = 0.02;
+            let startIdx = 0;
+            let endIdx = channel.length - 1;
+
+            for (let i = 0; i < channel.length; i++) {
+                if (Math.abs(channel[i]) > threshold) {
+                    startIdx = Math.max(0, i - 10);
+                    break;
+                }
+            }
+            for (let i = channel.length - 1; i >= 0; i--) {
+                if (Math.abs(channel[i]) > threshold) {
+                    endIdx = Math.min(channel.length - 1, i + 10);
+                    break;
+                }
+            }
+            if (startIdx >= endIdx) return buffer;
+
+            const newBuffer = audioCtx.createBuffer(buffer.numberOfChannels, endIdx - startIdx, buffer.sampleRate);
+            for (let c = 0; c < buffer.numberOfChannels; c++) {
+                const oldData = buffer.getChannelData(c);
+                const newData = newBuffer.getChannelData(c);
+                for (let i = 0; i < newBuffer.length; i++) {
+                    newData[i] = oldData[startIdx + i];
+                }
+            }
+            return newBuffer;
+        }
+
+        async function loadAudioBuffer(fileName) {
+            if (audioBufferCache[fileName]) return audioBufferCache[fileName];
+            try {
+                const response = await fetch(voicesBaseUrl + fileName);
+                const arrayBuffer = await response.arrayBuffer();
+                let decodedBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+                decodedBuffer = trimSilence(decodedBuffer);
+                audioBufferCache[fileName] = decodedBuffer;
+                return decodedBuffer;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        async function preloadAudioBuffers(fileNames) {
+            for (const file of fileNames) {
+                await loadAudioBuffer(file);
+            }
+        }
+
+        async function playMergedSequence(fileList) {
+            if (!audioCtx) return;
+            if (audioCtx.state === 'suspended') {
+                await audioCtx.resume();
+            }
+
+            let loadedBuffers = [];
+            let totalLength = 0;
+            let sampleRate = audioCtx.sampleRate;
+            let numberOfChannels = 1;
+
+            for (const file of fileList) {
+                let buffer = await loadAudioBuffer(file);
+                if (buffer) {
+                    loadedBuffers.push(buffer);
+                    totalLength += buffer.length;
+                    sampleRate = buffer.sampleRate;
+                    numberOfChannels = Math.max(numberOfChannels, buffer.numberOfChannels);
+                }
+            }
+
+            if (loadedBuffers.length === 0) return;
+
+            const masterBuffer = audioCtx.createBuffer(numberOfChannels, totalLength, sampleRate);
+            for (let c = 0; c < numberOfChannels; c++) {
+                const masterData = masterBuffer.getChannelData(c);
+                let offset = 0;
+                for (const buf of loadedBuffers) {
+                    const sourceData = buf.getChannelData(c % buf.numberOfChannels);
+                    masterData.set(sourceData, offset);
+                    offset += buf.length;
+                }
+            }
+
+            const source = audioCtx.createBufferSource();
+            source.buffer = masterBuffer;
+            source.connect(audioCtx.destination);
+            source.start(0);
+        }
+
+        async function triggerYourTurn(data) {
             const container = document.getElementById('mainContainer');
             const numBox = document.getElementById('currentNumber');
             const msgP = document.getElementById('msgPrimary');
             const msgS = document.getElementById('msgSecondary');
             const stopBtn = document.getElementById('stopBtn');
 
-            numBox.innerText = patientName;
+            numBox.innerText = data.patientNumber;
             msgP.innerText = "وصل دورك تفضل";
-            msgS.innerText = `العيادة: ${clinicName}`;
+            msgS.innerText = `التوجه إلى: ${data.clinicName}`;
             
             container.classList.add('alert-active');
             stopBtn.style.display = 'inline-block';
             
             try {
-                airportChimeSound.currentTime = 0;
-                airportChimeSound.play().catch(e => {});
+                const patientAudio = data.patientAudioFile || (data.patientNumber + '.mp3');
+                const clinicAudio = data.clinicAudioFile || 'lab.mp3';
+
+                await preloadAudioBuffers([patientAudio, clinicAudio]);
+
+                const sequence = [
+                    "ding.mp3",
+                    "please_wait.mp3",
+                    patientAudio,
+                    "goto.mp3",
+                    clinicAudio
+                ];
+
+                await playMergedSequence(sequence);
             } catch(e) {}
 
-            // تشغيل الاهتزاز الحقيقي للجوال بشكل متكرر
             if ("vibrate" in navigator) {
                 try {
                     navigator.vibrate([500, 300, 500, 300, 500, 300, 800]);
