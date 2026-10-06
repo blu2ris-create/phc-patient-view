@@ -40,16 +40,6 @@
             object-fit: contain;
         }
 
-        .center-heading {
-            font-size: clamp(1.4rem, 5vw, 1.8rem);
-            font-weight: bold;
-            color: #ffc107;
-            text-align: center;
-            letter-spacing: 0.5px;
-            width: 100%;
-            margin-top: 5px;
-        }
-
         .main-container {
             flex: 1;
             width: 100%;
@@ -59,6 +49,17 @@
             align-items: center;
             text-align: center;
             padding: 5px 0;
+        }
+
+        /* اسم المركز الصحي في منتصف المنطقة الفاصلة تماماً بين الشعار ومربع رقم المراجع */
+        .center-heading {
+            font-size: clamp(1.4rem, 5vw, 1.8rem);
+            font-weight: bold;
+            color: #ffc107;
+            text-align: center;
+            letter-spacing: 0.5px;
+            margin-bottom: 25px;
+            width: 100%;
         }
 
         .display-box {
@@ -192,13 +193,16 @@
         </div>
     </div>
 
+    <!-- الهيدر العلوي يحتوي على شعار التجمع في اليسار -->
     <div class="app-header">
-        <div style="width: 50px;"></div>
-        <div class="center-heading">مركز صحي الصالحية للرعاية الأولية</div>
+        <div></div>
         <img src="https://github.com/blu2ris-create/clinic-queue-system/blob/main/logo.png%20(2).png?raw=true" alt="شعار التجمع" class="cluster-logo">
     </div>
 
     <div class="main-container">
+        <!-- اسم المركز الصحي في المنتصف تماماً بين الشعار ومربع رقم المراجع -->
+        <div class="center-heading">مركز صحي الصالحية للرعاية الأولية</div>
+
         <div class="display-box" id="mainContainer">
             <div class="display-number" id="currentNumber">--</div>
             <div class="msg-primary" id="msgPrimary">في الانتظار...</div>
@@ -271,24 +275,26 @@
             
             requestWakeLock();
 
-            // تهيئة AudioContext تماماً مثل الشاشة الرئيسية لفك حظر الصوت في الجوال
             try {
                 const AudioContext = window.AudioContext || window.webkitAudioContext;
                 audioCtx = new AudioContext();
                 if (audioCtx.state === 'suspended') {
                     await audioCtx.resume();
                 }
+                const buffer = audioCtx.createBuffer(1, 1, 22050);
+                const source = audioCtx.createBufferSource();
+                source.buffer = buffer;
+                source.connect(audioCtx.destination);
+                source.start(0);
             } catch (e) {}
 
             if ("vibrate" in navigator) {
                 try { navigator.vibrate(200); } catch(e) {}
             }
 
-            // التحميل المسبق لملفات الصوت الأساسية من المستودع
             preloadAudioBuffers(["ding.mp3", "please_wait.mp3", "goto.mp3"]);
         }
 
-        // نفس دالة قص الصمت المطورة الموجودة في الشاشة الرئيسية
         function trimSilence(buffer) {
             const channel = buffer.getChannelData(0);
             const threshold = 0.02;
@@ -341,7 +347,6 @@
             }
         }
 
-        // دالة دمج وتشغيل الصوتيات من مستودع جيتهاب بدون أي فجوات تماماً كالرئيسية
         async function playMergedSequence(fileList) {
             if (!audioCtx) {
                 const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -399,7 +404,6 @@
             container.classList.add('alert-active');
             stopBtn.style.display = 'inline-block';
             
-            // تشغيل نفس سلسلة ملفات الصوت من مستودع جيتهاب تلقائياً
             try {
                 const patientAudio = data.patientAudioFile || (data.patientNumber + '.mp3');
                 const clinicAudio = data.clinicAudioFile || 'lab.mp3';
@@ -417,7 +421,6 @@
                 await playMergedSequence(sequence);
             } catch(e) {}
 
-            // تفعيل الاهتزاز المتكرر للجوال
             if ("vibrate" in navigator) {
                 try {
                     navigator.vibrate([600, 300, 600, 300, 600, 300, 1000]);
