@@ -40,27 +40,6 @@
             object-fit: contain;
         }
 
-        /* اسم المركز الصحي في أعلى الشاشة بالمنتصف تماماً */
-        .center-heading {
-            font-size: clamp(1.4rem, 5vw, 1.8rem);
-            font-weight: bold;
-            color: #ffc107;
-            text-align: center;
-            letter-spacing: 0.5px;
-            width: 100%;
-            margin-top: 5px;
-        }
-
-        /* المكان الذي حددته بكلمة "هنا" في المنتصف تماماً فوق مربع الانتظار */
-        .middle-text-area {
-            font-size: clamp(1rem, 4vw, 1.25rem);
-            color: #38bdf8;
-            font-weight: bold;
-            text-align: center;
-            margin: 15px 0;
-            letter-spacing: 0.5px;
-        }
-
         .main-container {
             flex: 1;
             width: 100%;
@@ -70,6 +49,17 @@
             align-items: center;
             text-align: center;
             padding: 5px 0;
+        }
+
+        /* اسم المركز الصحي في المنتصف تماماً بين شعار التجمع ومربع رقم المريض */
+        .center-heading {
+            font-size: clamp(1.5rem, 5.5vw, 2rem);
+            font-weight: bold;
+            color: #ffc107;
+            text-align: center;
+            letter-spacing: 0.5px;
+            margin-bottom: 25px;
+            width: 100%;
         }
 
         .display-box {
@@ -203,16 +193,15 @@
         </div>
     </div>
 
-    <!-- الهيدر العلوي: اسم المركز في المنتصف، شعار التجمع في اليسار -->
+    <!-- الهيدر العلوي يضم فقط شعار التجمع الصحي في اليسار -->
     <div class="app-header">
-        <div style="width: 50px;"></div>
-        <div class="center-heading">مركز صحي الصالحية</div>
+        <div></div>
         <img src="https://github.com/blu2ris-create/clinic-queue-system/blob/main/logo.png%20(2).png?raw=true" alt="شعار التجمع" class="cluster-logo">
     </div>
 
     <div class="main-container">
-        <!-- المساحة المحددة بكلمة "هنا" فوق مربع الانتظار تماماً -->
-        <div class="middle-text-area">نظام متابعة نداء المراجعين</div>
+        <!-- اسم المركز الصحي في المنتصف تماماً فوق مربع رقم المريض -->
+        <div class="center-heading">مركز صحي الصالحية</div>
 
         <div class="display-box" id="mainContainer">
             <div class="display-number" id="currentNumber">--</div>
@@ -322,7 +311,7 @@
             if (startIdx >= endIdx) return buffer;
 
             const newBuffer = audioCtx.createBuffer(buffer.numberOfChannels, endIdx - startIdx, buffer.sampleRate);
-            for (let c = 0; c < buffer.numberOfChannels; c++) {
+            for (let c = 0; c < numberOfChannels; c++) {
                 const oldData = buffer.getChannelData(c);
                 const newData = newBuffer.getChannelData(c);
                 for (let i = 0; i < newBuffer.length; i++) {
