@@ -192,14 +192,17 @@
         </div>
     </div>
 
-    <!-- الهيدر العلوي يحتوي على شعار التجمع في اليسار -->
+    <!-- عنصر فيديو خفي لمنع السبات في الأجهزة المعاندة (آيفون وجالكسي) -->
+    <video id="noSleepVideo" playsinline muted loop style="display:none; width:1px; height:1px;">
+        <source src="https://raw.githubusercontent.com/mediaelement/mediaelement/master/media/echo-hereweare.mp4" type="video/mp4">
+    </video>
+
     <div class="app-header">
         <div></div>
         <img src="https://github.com/blu2ris-create/clinic-queue-system/blob/main/logo.png%20(2).png?raw=true" alt="شعار التجمع" class="cluster-logo">
     </div>
 
     <div class="main-container">
-        <!-- اسم المركز الصحي في المنتصف تماماً بين الشعار ومربع رقم المراجع -->
         <div class="center-heading">مركز صحي الصالحية للرعاية الأولية</div>
 
         <div class="display-box" id="mainContainer">
@@ -216,17 +219,17 @@
         const brokerUrl = 'wss://broker.hivemq.com:8884/mqtt';
         const uniqueTopic = 'umran_health_cluster_ksa_2026_secure_calls';
         const clientId = 'client_reviewer_' + Math.random().toString(16).substr(2, 8);
-        const client = mqtt.connect(brokerUrl, { clientId: clientId });
-
+        
+        let client = null;
         const voicesBaseUrl = "https://raw.githubusercontent.com/blu2ris-create/health-cluster-audio/main/voices/";
         
         let myRegisteredNumber = "";
         let audioCtx = null;
         let audioBufferCache = {};
         let wakeLock = null;
-        let silentAudioElement = null;
+        let persistentAudio = null;
+        let oscillatorNode = null;
 
-        // منع إغلاق الشاشة
         async function requestWakeLock() {
             try {
                 if ('wakeLock' in navigator) {
@@ -235,56 +238,113 @@
             } catch (err) {}
         }
 
-        document.addEventListener('visibilitychange', async () => {
-            if (wakeLock !== null && document.visibilityState === 'visible') {
-                await requestWakeLock();
-            }
-            // استئناف محرك الصوت عند العودة من الخلفية إذا تم تجميده
-            if (document.visibilityState === 'visible' && audioCtx && audioCtx.state === 'suspended') {
-                try { await audioCtx.resume(); } catch(e) {}
-            }
-        });
-
-        // تشغيل صوت صامت في الخلفية لإبقاء المتصفح نشطاً وتفادي التجميد في أبل/أندرويد/هواوي
-        function startBackgroundAudioKeepAlive() {
+        // تشغيل تقنية الموجات الصوتية القسرية لمنع تجميد المعالج في الخلفية
+        function startForcedBackgroundEngine() {
             try {
-                if (!silentAudioElement) {
-                    silentAudioElement = document.createElement('audio');
-                    // كود صوت صامت قصير مسجل بنمط base64
-                    silentAudioElement.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==';
-                    silentAudioElement.loop = true;
-                    silentAudioElement.volume = 0.01; // صوت شبه معدوم
+                if (!audioCtx) {
+                    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                    audioCtx = new AudioContextClass();
                 }
-                silentAudioElement.play().catch(e => {});
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+
+                // إنشاء مذبذب صوتي صمت ترددي يعمل دون توقف لإجبار المتصفح على البقاء حياً
+                if (!oscillatorNode) {
+                    oscillatorNode = audioCtx.createOscillator();
+                    const gainNode = audioCtx.createGain();
+                    gainNode.gain.value = 0.00001; // صامت تماماً لا يسمعه المستخدم
+                    oscillatorNode.frequency.value = 1; 
+                    oscillatorNode.connect(gainNode);
+                    gainNode.connect(audioCtx.destination);
+                    oscillatorNode.start();
+                }
+            } catch(e) {}
+
+            // تشغيل الفيديو الخفي كدعم قسري إضافي لمانع السبات
+            try {
+                const video = document.getElementById('noSleepVideo');
+                if (video) {
+                    video.play().catch(e => {});
+                }
+            } catch(e) {}
+
+            // تشغيل مسار صوتي صامت إضافي
+            try {
+                if (!persistentAudio) {
+                    persistentAudio = document.createElement('audio');
+                    persistentAudio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU3LjgzLjEwMDAAAAAAAAAAAAAA//uQZAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAAEAAACbAACAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMA==';
+                    persistentAudio.loop = true;
+                    persistentAudio.volume = 0.001;
+                    persistentAudio.setAttribute('playsinline', '');
+                }
+                persistentAudio.play().catch(e => {});
             } catch(e) {}
         }
 
-        // طلب إذن الإشعارات لإظهار التنبيه والمستخدم خارج الصفحة
-        function requestNotificationPermission() {
-            if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
-                try {
-                    Notification.requestPermission();
-                } catch(e) {}
+        // مراقبة نشاط التطبيق وإعادة تنشيطه قسرياً فور عودة التركيز
+        document.addEventListener('visibilitychange', async () => {
+            if (document.visibilityState === 'visible') {
+                requestWakeLock();
+                startForcedBackgroundEngine();
+                checkAndReconnectMQTT();
+            }
+        });
+
+        window.addEventListener('focus', () => {
+            startForcedBackgroundEngine();
+            checkAndReconnectMQTT();
+        });
+
+        function initMqttClient() {
+            if (client) {
+                try { client.end(true); } catch(e) {}
+            }
+            
+            client = mqtt.connect(brokerUrl, {
+                clientId: clientId,
+                keepalive: 15,       // نبضة اتصال سريعة جداً كل 15 ثانية لمنع السامسونج وهواوي من قطع الاتصال
+                reconnectPeriod: 500 // إعادة ربط فورية خلال نصف ثانية فقط عند أي انقطاع
+            });
+
+            client.on('connect', () => {
+                client.subscribe(uniqueTopic);
+            });
+
+            client.on('message', (topic, message) => {
+                if (topic === uniqueTopic) {
+                    try {
+                        const data = JSON.parse(message.toString());
+                        const calledNum = String(data.patientNumber || '').trim();
+                        const myNum = String(myRegisteredNumber).trim();
+
+                        if (myNum && calledNum === myNum) {
+                            triggerYourTurn(data);
+                        }
+                    } catch (e) {}
+                }
+            });
+
+            client.on('offline', () => {
+                try { client.reconnect(); } catch(e) {}
+            });
+            
+            client.on('error', () => {
+                try { client.reconnect(); } catch(e) {}
+            });
+        }
+
+        function checkAndReconnectMQTT() {
+            if (!client || !client.connected) {
+                initMqttClient();
             }
         }
 
-        client.on('connect', () => {
-            client.subscribe(uniqueTopic);
-        });
-
-        client.on('message', (topic, message) => {
-            if (topic === uniqueTopic) {
-                try {
-                    const data = JSON.parse(message.toString());
-                    const calledNum = String(data.patientNumber || '').trim();
-                    const myNum = String(myRegisteredNumber).trim();
-
-                    if (myNum && calledNum === myNum) {
-                        triggerYourTurn(data);
-                    }
-                } catch (e) {}
+        function requestNotificationPermission() {
+            if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
+                try { Notification.requestPermission(); } catch(e) {}
             }
-        });
+        }
 
         async function activateSystem() {
             const inputVal = document.getElementById('patientIdentifier').value.trim();
@@ -304,22 +364,11 @@
             requestWakeLock();
             requestNotificationPermission();
 
-            // تفعيل محرك الصوت التفاعلي للآيفون والأندرويد وهواوي فور ضغط الزر الرئيسي
-            try {
-                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-                audioCtx = new AudioContextClass();
-                if (audioCtx.state === 'suspended') {
-                    await audioCtx.resume();
-                }
-                const buffer = audioCtx.createBuffer(1, 1, 22050);
-                const source = audioCtx.createBufferSource();
-                source.buffer = buffer;
-                source.connect(audioCtx.destination);
-                source.start(0);
-            } catch (e) {}
+            // إطلاق المحرك القسري المانع للسبت
+            startForcedBackgroundEngine();
 
-            // تفعيل إبقاء الصفحة نشطة بالخلفية عبر الصوت الصامت
-            startBackgroundAudioKeepAlive();
+            // بدء نظام الاتصال
+            initMqttClient();
 
             if ("vibrate" in navigator) {
                 try { navigator.vibrate(200); } catch(e) {}
@@ -437,7 +486,6 @@
             container.classList.add('alert-active');
             stopBtn.style.display = 'inline-block';
             
-            // إرسال إشعار منبثق في حال كان الجوال مفيأً أو المتصفح بالخلفية
             if ("Notification" in window && Notification.permission === "granted") {
                 try {
                     new Notification("وصل دورك الآن 🔔", {
@@ -466,7 +514,7 @@
 
             if ("vibrate" in navigator) {
                 try {
-                    navigator.vibrate([600, 300, 600, 300, 600, 300, 1000]);
+                    navigator.vibrate([800, 400, 800, 400, 800, 400, 1200]);
                 } catch(e) {}
             }
         }
