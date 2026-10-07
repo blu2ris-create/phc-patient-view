@@ -152,22 +152,15 @@
             border-color: #ffc107;
         }
 
-        /* نافذة توجيه للآيفون فقط عند الحاجة */
-        #iosTipModal {
-            display: none;
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #1e293b;
-            border: 2px solid #38bdf8;
-            border-radius: 16px;
-            padding: 15px;
-            width: 90%;
-            max-width: 380px;
-            z-index: 10000;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.8);
-            text-align: center;
+        .status-badge {
+            margin-top: 12px;
+            font-size: 0.8rem;
+            color: #22c55e;
+            background: rgba(34, 197, 94, 0.1);
+            padding: 6px 10px;
+            border-radius: 8px;
+            border: 1px solid #22c55e;
+            display: inline-block;
         }
 
         @keyframes flashAlert {
@@ -206,22 +199,12 @@
     <div id="activationOverlay">
         <div class="welcome-card">
             <h3 style="color: #ffc107; font-weight: bold; margin-bottom: 5px; font-size: 1.2rem;">مركز صحي الصالحية للرعاية الأولية</h3>
-            <p style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 20px; line-height: 1.4;">أدخل رقم التذكرة الخاص بك لتفعيل النداء والاهتزاز الفوري:</p>
+            <p style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 15px; line-height: 1.4;">أدخل رقم التذكرة الخاص بك لتفعيل نظام النداء في الخلفية وعند إغلاق الشاشة:</p>
             <input type="number" id="patientIdentifier" class="user-input" placeholder="مثال: 46" autocomplete="off">
             <button onclick="activateSystem()" style="background: #ffc107; color: #0b0f19; border: none; padding: 14px 20px; font-size: 1.1rem; font-weight: bold; border-radius: 14px; width: 100%; cursor: pointer; box-shadow: 0 5px 15px rgba(255,193,7,0.3);">بدء وتفعيل النظام 🚀</button>
+            <div id="statusIndicator" style="display:none;" class="status-badge">✔ تم تفعيل نداء الخلفية بنجاح</div>
         </div>
     </div>
-
-    <!-- نافذة سريعة تظهر لمستخدمي الآيفون فقط توضح مكان الضغط -->
-    <div id="iosTipModal">
-        <p style="font-size: 0.9rem; color: #fff; margin-bottom: 8px;">📲 <b>لضمان وصول النداء والشاشة مقفلة:</b></p>
-        <p style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 12px;">اضغط على زر المشاركة <span style="color:#38bdf8;">⎋</span> بالأسفل ثم اختر <b>"إضافة إلى الشاشة الرئيسية"</b>.</p>
-        <button onclick="closeIosTip()" style="background:#38bdf8; color:#0b0f19; border:none; padding:6px 15px; border-radius:8px; font-weight:bold;">حسناً، فهمت</button>
-    </div>
-
-    <video id="pwaKeepAlive" playsinline muted loop style="display:none; width:1px; height:1px;">
-        <source src="https://raw.githubusercontent.com/mediaelement/mediaelement/master/media/echo-hereweare.mp4" type="video/mp4">
-    </video>
 
     <div class="app-header">
         <div></div>
@@ -252,63 +235,15 @@
         let myRegisteredNumber = "";
         let audioCtx = null;
         let audioBufferCache = {};
-        let wakeLock = null;
-        let oscillatorNode = null;
-        let deferredPrompt = null; // لالتقاط أمر التثبيت التلقائي
 
-        // التقاط حدث التثبيت المباشر لأجهزة الأندرويد والهواوي
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-        });
-
-        async function requestWakeLock() {
-            try {
-                if ('wakeLock' in navigator) {
-                    wakeLock = await navigator.wakeLock.request('screen');
-                }
-            } catch (err) {}
+        // تسجيل الـ Service Worker في خلفية المتصفح تلقائياً عند فتح الصفحة
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').then((reg) => {
+                console.log('Service Worker Registered');
+            }).catch((err) => {
+                console.log('SW Registration Failed', err);
+            });
         }
-
-        function startForcedEngine() {
-            try {
-                if (!audioCtx) {
-                    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-                    audioCtx = new AudioContextClass();
-                }
-                if (audioCtx.state === 'suspended') {
-                    audioCtx.resume();
-                }
-
-                if (!oscillatorNode) {
-                    oscillatorNode = audioCtx.createOscillator();
-                    const gainNode = audioCtx.createGain();
-                    gainNode.gain.value = 0.00001;
-                    oscillatorNode.frequency.value = 1;
-                    oscillatorNode.connect(gainNode);
-                    gainNode.connect(audioCtx.destination);
-                    oscillatorNode.start();
-                }
-            } catch(e) {}
-
-            try {
-                const video = document.getElementById('pwaKeepAlive');
-                if (video) { video.play().catch(e => {}); }
-            } catch(e) {}
-        }
-
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') {
-                requestWakeLock();
-                startForcedEngine();
-                checkAndReconnectMQTT();
-            }
-        });
-
-        window.addEventListener('focus', () => {
-            startForcedEngine();
-            checkAndReconnectMQTT();
-        });
 
         function initMqttClient() {
             if (client) {
@@ -317,8 +252,8 @@
             
             client = mqtt.connect(brokerUrl, {
                 clientId: clientId,
-                keepalive: 10,
-                reconnectPeriod: 300
+                keepalive: 15,
+                reconnectPeriod: 500
             });
 
             client.on('connect', () => {
@@ -347,18 +282,6 @@
             });
         }
 
-        function checkAndReconnectMQTT() {
-            if (!client || !client.connected) {
-                initMqttClient();
-            }
-        }
-
-        async function requestPermissions() {
-            if ("Notification" in window && Notification.permission !== "granted") {
-                try { await Notification.requestPermission(); } catch(e) {}
-            }
-        }
-
         async function activateSystem() {
             const inputVal = document.getElementById('patientIdentifier').value.trim();
             if (!inputVal) {
@@ -368,79 +291,33 @@
 
             myRegisteredNumber = inputVal;
             document.getElementById('myTagDisplay').innerText = myRegisteredNumber;
-            
-            // 1. إطلاق نافذة التثبيت الآلية لأجهزة أندرويد وهواوي إذا كانت متاحة
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-                deferredPrompt.userChoice.then(() => {
-                    deferredPrompt = null;
-                });
-            } else {
-                // 2. إذا كان الجهاز آيفون والصفحة فتحت من متصفح عادي، اظهر التوجيه البسيط
-                const isIos = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-                const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
-                if (isIos && !isStandalone) {
-                    document.getElementById('iosTipModal').style.display = 'block';
+
+            // طلب إذن الإشعارات الفورية الحية من نظام الجوال (هواوي، جالكسي، آيفون)
+            if ("Notification" in window) {
+                const permission = await Notification.requestPermission();
+                if (permission !== "granted") {
+                    alert('⚠️ تنبيه: يرجى السماح بالاشعارات لضمان تنبيهك حتى لو كانت الشاشة مقفلة.');
                 }
             }
 
+            // إخفاء شاشة الإدخال والانتقال للرئيسية
             const overlay = document.getElementById('activationOverlay');
             if (overlay) { overlay.style.display = 'none'; }
             
-            requestWakeLock();
-            requestPermissions();
-            startForcedEngine();
             initMqttClient();
-
-            if ("vibrate" in navigator) {
-                try { navigator.vibrate(200); } catch(e) {}
-            }
-
             preloadAudioBuffers(["ding.mp3", "please_wait.mp3", "goto.mp3"]);
         }
 
-        function closeIosTip() {
-            document.getElementById('iosTipModal').style.display = 'none';
-        }
-
-        function trimSilence(buffer) {
-            const channel = buffer.getChannelData(0);
-            const threshold = 0.02;
-            let startIdx = 0;
-            let endIdx = channel.length - 1;
-
-            for (let i = 0; i < channel.length; i++) {
-                if (Math.abs(channel[i]) > threshold) {
-                    startIdx = Math.max(0, i - 10);
-                    break;
-                }
-            }
-            for (let i = channel.length - 1; i >= 0; i--) {
-                if (Math.abs(channel[i]) > threshold) {
-                    endIdx = Math.min(channel.length - 1, i + 10);
-                    break;
-                }
-            }
-            if (startIdx >= endIdx) return buffer;
-
-            const newBuffer = audioCtx.createBuffer(buffer.numberOfChannels, endIdx - startIdx, buffer.sampleRate);
-            for (let c = 0; c < buffer.numberOfChannels; c++) {
-                const oldData = buffer.getChannelData(c);
-                const newData = newBuffer.getChannelData(c);
-                for (let i = 0; i < newBuffer.length; i++) {
-                    newData[i] = oldData[startIdx + i];
-                }
-            }
-            return newBuffer;
-        }
-
         async function loadAudioBuffer(fileName) {
+            if (!audioCtx) {
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContextClass();
+            }
             if (audioBufferCache[fileName]) return audioBufferCache[fileName];
             try {
                 const response = await fetch(voicesBaseUrl + fileName);
                 const arrayBuffer = await response.arrayBuffer();
                 let decodedBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-                decodedBuffer = trimSilence(decodedBuffer);
                 audioBufferCache[fileName] = decodedBuffer;
                 return decodedBuffer;
             } catch (e) {
@@ -449,7 +326,6 @@
         }
 
         async function preloadAudioBuffers(fileNames) {
-            if (!audioCtx) return;
             for (const file of fileNames) {
                 await loadAudioBuffer(file);
             }
@@ -511,17 +387,6 @@
             
             container.classList.add('alert-active');
             stopBtn.style.display = 'inline-block';
-            
-            if ("Notification" in window && Notification.permission === "granted") {
-                try {
-                    new Notification("🔔 وصل دورك الآن في المركز الصحي", {
-                        body: `رقم التذكرة: ${data.patientNumber} - التوجه إلى: ${data.clinicName}`,
-                        icon: 'https://github.com/blu2ris-create/clinic-queue-system/blob/main/logo.png%20(2).png?raw=true',
-                        tag: 'clinic-turn-alert',
-                        renotify: true
-                    });
-                } catch(e) {}
-            }
 
             try {
                 const patientAudio = data.patientAudioFile || (data.patientNumber + '.mp3');
@@ -539,12 +404,6 @@
 
                 await playMergedSequence(sequence);
             } catch(e) {}
-
-            if ("vibrate" in navigator) {
-                try {
-                    navigator.vibrate([1000, 500, 1000, 500, 1000, 500, 1500]);
-                } catch(e) {}
-            }
         }
 
         function stopAlert() {
