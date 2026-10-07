@@ -9,6 +9,7 @@
     <meta name="theme-color" content="#0b0f19">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="نداء المركز الصحي">
 
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -151,6 +152,24 @@
             border-color: #ffc107;
         }
 
+        /* نافذة توجيه للآيفون فقط عند الحاجة */
+        #iosTipModal {
+            display: none;
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e293b;
+            border: 2px solid #38bdf8;
+            border-radius: 16px;
+            padding: 15px;
+            width: 90%;
+            max-width: 380px;
+            z-index: 10000;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.8);
+            text-align: center;
+        }
+
         @keyframes flashAlert {
             0% { background-color: #151c2c; border-color: #d9534f; }
             50% { background-color: #451a1a; border-color: #d9534f; }
@@ -165,9 +184,10 @@
         }
         .alert-active {
             animation: flashAlert 0.8s infinite, shakeAlert 0.4s infinite;
+            border-color: #d9534f !important;
         }
         .alert-active .display-number {
-            color: #ff6b6b;
+            color: #ff6b6b !important;
         }
 
         .footer-note {
@@ -186,14 +206,20 @@
     <div id="activationOverlay">
         <div class="welcome-card">
             <h3 style="color: #ffc107; font-weight: bold; margin-bottom: 5px; font-size: 1.2rem;">مركز صحي الصالحية للرعاية الأولية</h3>
-            <p style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 20px; line-height: 1.4;">أدخل رقم التذكرة الخاص بك لكي يصلك النداء الصوتي والاهتزاز:</p>
+            <p style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 20px; line-height: 1.4;">أدخل رقم التذكرة الخاص بك لتفعيل النداء والاهتزاز الفوري:</p>
             <input type="number" id="patientIdentifier" class="user-input" placeholder="مثال: 46" autocomplete="off">
-            <button onclick="activateSystem()" style="background: #ffc107; color: #0b0f19; border: none; padding: 14px 20px; font-size: 1.1rem; font-weight: bold; border-radius: 14px; width: 100%; cursor: pointer; box-shadow: 0 5px 15px rgba(255,193,7,0.3);">بدء المتابعة وتفعيل النظام 🚀</button>
+            <button onclick="activateSystem()" style="background: #ffc107; color: #0b0f19; border: none; padding: 14px 20px; font-size: 1.1rem; font-weight: bold; border-radius: 14px; width: 100%; cursor: pointer; box-shadow: 0 5px 15px rgba(255,193,7,0.3);">بدء وتفعيل النظام 🚀</button>
         </div>
     </div>
 
-    <!-- عنصر فيديو خفي لمنع السبات في الأجهزة المعاندة (آيفون وجالكسي) -->
-    <video id="noSleepVideo" playsinline muted loop style="display:none; width:1px; height:1px;">
+    <!-- نافذة سريعة تظهر لمستخدمي الآيفون فقط توضح مكان الضغط -->
+    <div id="iosTipModal">
+        <p style="font-size: 0.9rem; color: #fff; margin-bottom: 8px;">📲 <b>لضمان وصول النداء والشاشة مقفلة:</b></p>
+        <p style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 12px;">اضغط على زر المشاركة <span style="color:#38bdf8;">⎋</span> بالأسفل ثم اختر <b>"إضافة إلى الشاشة الرئيسية"</b>.</p>
+        <button onclick="closeIosTip()" style="background:#38bdf8; color:#0b0f19; border:none; padding:6px 15px; border-radius:8px; font-weight:bold;">حسناً، فهمت</button>
+    </div>
+
+    <video id="pwaKeepAlive" playsinline muted loop style="display:none; width:1px; height:1px;">
         <source src="https://raw.githubusercontent.com/mediaelement/mediaelement/master/media/echo-hereweare.mp4" type="video/mp4">
     </video>
 
@@ -218,7 +244,7 @@
     <script>
         const brokerUrl = 'wss://broker.hivemq.com:8884/mqtt';
         const uniqueTopic = 'umran_health_cluster_ksa_2026_secure_calls';
-        const clientId = 'client_reviewer_' + Math.random().toString(16).substr(2, 8);
+        const clientId = 'client_pwa_' + Math.random().toString(16).substr(2, 8);
         
         let client = null;
         const voicesBaseUrl = "https://raw.githubusercontent.com/blu2ris-create/health-cluster-audio/main/voices/";
@@ -227,8 +253,14 @@
         let audioCtx = null;
         let audioBufferCache = {};
         let wakeLock = null;
-        let persistentAudio = null;
         let oscillatorNode = null;
+        let deferredPrompt = null; // لالتقاط أمر التثبيت التلقائي
+
+        // التقاط حدث التثبيت المباشر لأجهزة الأندرويد والهواوي
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+        });
 
         async function requestWakeLock() {
             try {
@@ -238,8 +270,7 @@
             } catch (err) {}
         }
 
-        // تشغيل تقنية الموجات الصوتية القسرية لمنع تجميد المعالج في الخلفية
-        function startForcedBackgroundEngine() {
+        function startForcedEngine() {
             try {
                 if (!audioCtx) {
                     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -249,50 +280,33 @@
                     audioCtx.resume();
                 }
 
-                // إنشاء مذبذب صوتي صمت ترددي يعمل دون توقف لإجبار المتصفح على البقاء حياً
                 if (!oscillatorNode) {
                     oscillatorNode = audioCtx.createOscillator();
                     const gainNode = audioCtx.createGain();
-                    gainNode.gain.value = 0.00001; // صامت تماماً لا يسمعه المستخدم
-                    oscillatorNode.frequency.value = 1; 
+                    gainNode.gain.value = 0.00001;
+                    oscillatorNode.frequency.value = 1;
                     oscillatorNode.connect(gainNode);
                     gainNode.connect(audioCtx.destination);
                     oscillatorNode.start();
                 }
             } catch(e) {}
 
-            // تشغيل الفيديو الخفي كدعم قسري إضافي لمانع السبات
             try {
-                const video = document.getElementById('noSleepVideo');
-                if (video) {
-                    video.play().catch(e => {});
-                }
-            } catch(e) {}
-
-            // تشغيل مسار صوتي صامت إضافي
-            try {
-                if (!persistentAudio) {
-                    persistentAudio = document.createElement('audio');
-                    persistentAudio.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU3LjgzLjEwMDAAAAAAAAAAAAAA//uQZAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAAEAAACbAACAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMA==';
-                    persistentAudio.loop = true;
-                    persistentAudio.volume = 0.001;
-                    persistentAudio.setAttribute('playsinline', '');
-                }
-                persistentAudio.play().catch(e => {});
+                const video = document.getElementById('pwaKeepAlive');
+                if (video) { video.play().catch(e => {}); }
             } catch(e) {}
         }
 
-        // مراقبة نشاط التطبيق وإعادة تنشيطه قسرياً فور عودة التركيز
-        document.addEventListener('visibilitychange', async () => {
+        document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
                 requestWakeLock();
-                startForcedBackgroundEngine();
+                startForcedEngine();
                 checkAndReconnectMQTT();
             }
         });
 
         window.addEventListener('focus', () => {
-            startForcedBackgroundEngine();
+            startForcedEngine();
             checkAndReconnectMQTT();
         });
 
@@ -303,8 +317,8 @@
             
             client = mqtt.connect(brokerUrl, {
                 clientId: clientId,
-                keepalive: 15,       // نبضة اتصال سريعة جداً كل 15 ثانية لمنع السامسونج وهواوي من قطع الاتصال
-                reconnectPeriod: 500 // إعادة ربط فورية خلال نصف ثانية فقط عند أي انقطاع
+                keepalive: 10,
+                reconnectPeriod: 300
             });
 
             client.on('connect', () => {
@@ -328,7 +342,6 @@
             client.on('offline', () => {
                 try { client.reconnect(); } catch(e) {}
             });
-            
             client.on('error', () => {
                 try { client.reconnect(); } catch(e) {}
             });
@@ -340,9 +353,9 @@
             }
         }
 
-        function requestNotificationPermission() {
-            if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
-                try { Notification.requestPermission(); } catch(e) {}
+        async function requestPermissions() {
+            if ("Notification" in window && Notification.permission !== "granted") {
+                try { await Notification.requestPermission(); } catch(e) {}
             }
         }
 
@@ -356,18 +369,27 @@
             myRegisteredNumber = inputVal;
             document.getElementById('myTagDisplay').innerText = myRegisteredNumber;
             
-            const overlay = document.getElementById('activationOverlay');
-            if (overlay) {
-                overlay.style.display = 'none';
+            // 1. إطلاق نافذة التثبيت الآلية لأجهزة أندرويد وهواوي إذا كانت متاحة
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then(() => {
+                    deferredPrompt = null;
+                });
+            } else {
+                // 2. إذا كان الجهاز آيفون والصفحة فتحت من متصفح عادي، اظهر التوجيه البسيط
+                const isIos = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+                const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+                if (isIos && !isStandalone) {
+                    document.getElementById('iosTipModal').style.display = 'block';
+                }
             }
+
+            const overlay = document.getElementById('activationOverlay');
+            if (overlay) { overlay.style.display = 'none'; }
             
             requestWakeLock();
-            requestNotificationPermission();
-
-            // إطلاق المحرك القسري المانع للسبت
-            startForcedBackgroundEngine();
-
-            // بدء نظام الاتصال
+            requestPermissions();
+            startForcedEngine();
             initMqttClient();
 
             if ("vibrate" in navigator) {
@@ -375,6 +397,10 @@
             }
 
             preloadAudioBuffers(["ding.mp3", "please_wait.mp3", "goto.mp3"]);
+        }
+
+        function closeIosTip() {
+            document.getElementById('iosTipModal').style.display = 'none';
         }
 
         function trimSilence(buffer) {
@@ -488,9 +514,11 @@
             
             if ("Notification" in window && Notification.permission === "granted") {
                 try {
-                    new Notification("وصل دورك الآن 🔔", {
-                        body: `رقمك ${data.patientNumber} - يرجى التوجه إلى ${data.clinicName}`,
-                        icon: 'https://github.com/blu2ris-create/clinic-queue-system/blob/main/logo.png%20(2).png?raw=true'
+                    new Notification("🔔 وصل دورك الآن في المركز الصحي", {
+                        body: `رقم التذكرة: ${data.patientNumber} - التوجه إلى: ${data.clinicName}`,
+                        icon: 'https://github.com/blu2ris-create/clinic-queue-system/blob/main/logo.png%20(2).png?raw=true',
+                        tag: 'clinic-turn-alert',
+                        renotify: true
                     });
                 } catch(e) {}
             }
@@ -514,7 +542,7 @@
 
             if ("vibrate" in navigator) {
                 try {
-                    navigator.vibrate([800, 400, 800, 400, 800, 400, 1200]);
+                    navigator.vibrate([1000, 500, 1000, 500, 1000, 500, 1500]);
                 } catch(e) {}
             }
         }
