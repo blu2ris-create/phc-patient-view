@@ -51,7 +51,6 @@
             padding: 5px 0;
         }
 
-        /* اسم المركز الصحي في منتصف المنطقة الفاصلة تماماً بين الشعار ومربع رقم المراجع */
         .center-heading {
             font-size: clamp(1.4rem, 5vw, 1.8rem);
             font-weight: bold;
@@ -225,7 +224,9 @@
         let audioCtx = null;
         let audioBufferCache = {};
         let wakeLock = null;
+        let silentAudioElement = null;
 
+        // منع إغلاق الشاشة
         async function requestWakeLock() {
             try {
                 if ('wakeLock' in navigator) {
@@ -238,7 +239,34 @@
             if (wakeLock !== null && document.visibilityState === 'visible') {
                 await requestWakeLock();
             }
+            // استئناف محرك الصوت عند العودة من الخلفية إذا تم تجميده
+            if (document.visibilityState === 'visible' && audioCtx && audioCtx.state === 'suspended') {
+                try { await audioCtx.resume(); } catch(e) {}
+            }
         });
+
+        // تشغيل صوت صامت في الخلفية لإبقاء المتصفح نشطاً وتفادي التجميد في أبل/أندرويد/هواوي
+        function startBackgroundAudioKeepAlive() {
+            try {
+                if (!silentAudioElement) {
+                    silentAudioElement = document.createElement('audio');
+                    // كود صوت صامت قصير مسجل بنمط base64
+                    silentAudioElement.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==';
+                    silentAudioElement.loop = true;
+                    silentAudioElement.volume = 0.01; // صوت شبه معدوم
+                }
+                silentAudioElement.play().catch(e => {});
+            } catch(e) {}
+        }
+
+        // طلب إذن الإشعارات لإظهار التنبيه والمستخدم خارج الصفحة
+        function requestNotificationPermission() {
+            if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
+                try {
+                    Notification.requestPermission();
+                } catch(e) {}
+            }
+        }
 
         client.on('connect', () => {
             client.subscribe(uniqueTopic);
@@ -274,10 +302,12 @@
             }
             
             requestWakeLock();
+            requestNotificationPermission();
 
+            // تفعيل محرك الصوت التفاعلي للآيفون والأندرويد وهواوي فور ضغط الزر الرئيسي
             try {
-                const AudioContext = window.AudioContext || window.webkitAudioContext;
-                audioCtx = new AudioContext();
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContextClass();
                 if (audioCtx.state === 'suspended') {
                     await audioCtx.resume();
                 }
@@ -287,6 +317,9 @@
                 source.connect(audioCtx.destination);
                 source.start(0);
             } catch (e) {}
+
+            // تفعيل إبقاء الصفحة نشطة بالخلفية عبر الصوت الصامت
+            startBackgroundAudioKeepAlive();
 
             if ("vibrate" in navigator) {
                 try { navigator.vibrate(200); } catch(e) {}
@@ -349,8 +382,8 @@
 
         async function playMergedSequence(fileList) {
             if (!audioCtx) {
-                const AudioContext = window.AudioContext || window.webkitAudioContext;
-                audioCtx = new AudioContext();
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContextClass();
             }
             if (audioCtx.state === 'suspended') {
                 await audioCtx.resume();
@@ -404,6 +437,16 @@
             container.classList.add('alert-active');
             stopBtn.style.display = 'inline-block';
             
+            // إرسال إشعار منبثق في حال كان الجوال مفيأً أو المتصفح بالخلفية
+            if ("Notification" in window && Notification.permission === "granted") {
+                try {
+                    new Notification("وصل دورك الآن 🔔", {
+                        body: `رقمك ${data.patientNumber} - يرجى التوجه إلى ${data.clinicName}`,
+                        icon: 'https://github.com/blu2ris-create/clinic-queue-system/blob/main/logo.png%20(2).png?raw=true'
+                    });
+                } catch(e) {}
+            }
+
             try {
                 const patientAudio = data.patientAudioFile || (data.patientNumber + '.mp3');
                 const clinicAudio = data.clinicAudioFile || 'lab.mp3';
