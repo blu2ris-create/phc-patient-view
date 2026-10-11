@@ -9,7 +9,6 @@
     <meta name="theme-color" content="#0b0f19">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="نداء المركز الصحي">
 
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -152,17 +151,6 @@
             border-color: #ffc107;
         }
 
-        .status-badge {
-            margin-top: 12px;
-            font-size: 0.8rem;
-            color: #22c55e;
-            background: rgba(34, 197, 94, 0.1);
-            padding: 6px 10px;
-            border-radius: 8px;
-            border: 1px solid #22c55e;
-            display: inline-block;
-        }
-
         @keyframes flashAlert {
             0% { background-color: #151c2c; border-color: #d9534f; }
             50% { background-color: #451a1a; border-color: #d9534f; }
@@ -177,10 +165,9 @@
         }
         .alert-active {
             animation: flashAlert 0.8s infinite, shakeAlert 0.4s infinite;
-            border-color: #d9534f !important;
         }
         .alert-active .display-number {
-            color: #ff6b6b !important;
+            color: #ff6b6b;
         }
 
         .footer-note {
@@ -199,19 +186,20 @@
     <div id="activationOverlay">
         <div class="welcome-card">
             <h3 style="color: #ffc107; font-weight: bold; margin-bottom: 5px; font-size: 1.2rem;">مركز صحي الصالحية للرعاية الأولية</h3>
-            <p style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 15px; line-height: 1.4;">أدخل رقم التذكرة الخاص بك لتفعيل نظام النداء في الخلفية وعند إغلاق الشاشة:</p>
+            <p style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 20px; line-height: 1.4;">أدخل رقم التذكرة الخاص بك لكي يصلك النداء الصوتي والاهتزاز:</p>
             <input type="number" id="patientIdentifier" class="user-input" placeholder="مثال: 46" autocomplete="off">
-            <button onclick="activateSystem()" style="background: #ffc107; color: #0b0f19; border: none; padding: 14px 20px; font-size: 1.1rem; font-weight: bold; border-radius: 14px; width: 100%; cursor: pointer; box-shadow: 0 5px 15px rgba(255,193,7,0.3);">بدء وتفعيل النظام 🚀</button>
-            <div id="statusIndicator" style="display:none;" class="status-badge">✔ تم تفعيل نداء الخلفية بنجاح</div>
+            <button onclick="activateSystem()" style="background: #ffc107; color: #0b0f19; border: none; padding: 14px 20px; font-size: 1.1rem; font-weight: bold; border-radius: 14px; width: 100%; cursor: pointer; box-shadow: 0 5px 15px rgba(255,193,7,0.3);">بدء المتابعة وتفعيل النظام 🚀</button>
         </div>
     </div>
 
+    <!-- الهيدر العلوي يحتوي على شعار التجمع في اليسار -->
     <div class="app-header">
         <div></div>
         <img src="https://github.com/blu2ris-create/clinic-queue-system/blob/main/logo.png%20(2).png?raw=true" alt="شعار التجمع" class="cluster-logo">
     </div>
 
     <div class="main-container">
+        <!-- اسم المركز الصحي في المنتصف تماماً بين الشعار ومربع رقم المراجع -->
         <div class="center-heading">مركز صحي الصالحية للرعاية الأولية</div>
 
         <div class="display-box" id="mainContainer">
@@ -227,60 +215,76 @@
     <script>
         const brokerUrl = 'wss://broker.hivemq.com:8884/mqtt';
         const uniqueTopic = 'umran_health_cluster_ksa_2026_secure_calls';
-        const clientId = 'client_pwa_' + Math.random().toString(16).substr(2, 8);
-        
-        let client = null;
+        const clientId = 'client_reviewer_' + Math.random().toString(16).substr(2, 8);
+        const client = mqtt.connect(brokerUrl, { clientId: clientId });
+
         const voicesBaseUrl = "https://raw.githubusercontent.com/blu2ris-create/health-cluster-audio/main/voices/";
         
         let myRegisteredNumber = "";
         let audioCtx = null;
         let audioBufferCache = {};
+        let wakeLock = null;
+        let silentAudioElement = null;
 
-        // تسجيل الـ Service Worker في خلفية المتصفح تلقائياً عند فتح الصفحة
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js').then((reg) => {
-                console.log('Service Worker Registered');
-            }).catch((err) => {
-                console.log('SW Registration Failed', err);
-            });
-        }
-
-        function initMqttClient() {
-            if (client) {
-                try { client.end(true); } catch(e) {}
-            }
-            
-            client = mqtt.connect(brokerUrl, {
-                clientId: clientId,
-                keepalive: 15,
-                reconnectPeriod: 500
-            });
-
-            client.on('connect', () => {
-                client.subscribe(uniqueTopic);
-            });
-
-            client.on('message', (topic, message) => {
-                if (topic === uniqueTopic) {
-                    try {
-                        const data = JSON.parse(message.toString());
-                        const calledNum = String(data.patientNumber || '').trim();
-                        const myNum = String(myRegisteredNumber).trim();
-
-                        if (myNum && calledNum === myNum) {
-                            triggerYourTurn(data);
-                        }
-                    } catch (e) {}
+        // منع إغلاق الشاشة
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
                 }
-            });
-
-            client.on('offline', () => {
-                try { client.reconnect(); } catch(e) {}
-            });
-            client.on('error', () => {
-                try { client.reconnect(); } catch(e) {}
-            });
+            } catch (err) {}
         }
+
+        document.addEventListener('visibilitychange', async () => {
+            if (wakeLock !== null && document.visibilityState === 'visible') {
+                await requestWakeLock();
+            }
+            // استئناف محرك الصوت عند العودة من الخلفية إذا تم تجميده
+            if (document.visibilityState === 'visible' && audioCtx && audioCtx.state === 'suspended') {
+                try { await audioCtx.resume(); } catch(e) {}
+            }
+        });
+
+        // تشغيل صوت صامت في الخلفية لإبقاء المتصفح نشطاً وتفادي التجميد في أبل/أندرويد/هواوي
+        function startBackgroundAudioKeepAlive() {
+            try {
+                if (!silentAudioElement) {
+                    silentAudioElement = document.createElement('audio');
+                    // كود صوت صامت قصير مسجل بنمط base64
+                    silentAudioElement.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==';
+                    silentAudioElement.loop = true;
+                    silentAudioElement.volume = 0.01; // صوت شبه معدوم
+                }
+                silentAudioElement.play().catch(e => {});
+            } catch(e) {}
+        }
+
+        // طلب إذن الإشعارات لإظهار التنبيه والمستخدم خارج الصفحة
+        function requestNotificationPermission() {
+            if ("Notification" in window && Notification.permission !== "granted" && Notification.permission !== "denied") {
+                try {
+                    Notification.requestPermission();
+                } catch(e) {}
+            }
+        }
+
+        client.on('connect', () => {
+            client.subscribe(uniqueTopic);
+        });
+
+        client.on('message', (topic, message) => {
+            if (topic === uniqueTopic) {
+                try {
+                    const data = JSON.parse(message.toString());
+                    const calledNum = String(data.patientNumber || '').trim();
+                    const myNum = String(myRegisteredNumber).trim();
+
+                    if (myNum && calledNum === myNum) {
+                        triggerYourTurn(data);
+                    }
+                } catch (e) {}
+            }
+        });
 
         async function activateSystem() {
             const inputVal = document.getElementById('patientIdentifier').value.trim();
@@ -291,33 +295,77 @@
 
             myRegisteredNumber = inputVal;
             document.getElementById('myTagDisplay').innerText = myRegisteredNumber;
+            
+            const overlay = document.getElementById('activationOverlay');
+            if (overlay) {
+                overlay.style.display = 'none';
+            }
+            
+            requestWakeLock();
+            requestNotificationPermission();
 
-            // طلب إذن الإشعارات الفورية الحية من نظام الجوال (هواوي، جالكسي، آيفون)
-            if ("Notification" in window) {
-                const permission = await Notification.requestPermission();
-                if (permission !== "granted") {
-                    alert('⚠️ تنبيه: يرجى السماح بالاشعارات لضمان تنبيهك حتى لو كانت الشاشة مقفلة.');
+            // تفعيل محرك الصوت التفاعلي للآيفون والأندرويد وهواوي فور ضغط الزر الرئيسي
+            try {
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContextClass();
+                if (audioCtx.state === 'suspended') {
+                    await audioCtx.resume();
                 }
+                const buffer = audioCtx.createBuffer(1, 1, 22050);
+                const source = audioCtx.createBufferSource();
+                source.buffer = buffer;
+                source.connect(audioCtx.destination);
+                source.start(0);
+            } catch (e) {}
+
+            // تفعيل إبقاء الصفحة نشطة بالخلفية عبر الصوت الصامت
+            startBackgroundAudioKeepAlive();
+
+            if ("vibrate" in navigator) {
+                try { navigator.vibrate(200); } catch(e) {}
             }
 
-            // إخفاء شاشة الإدخال والانتقال للرئيسية
-            const overlay = document.getElementById('activationOverlay');
-            if (overlay) { overlay.style.display = 'none'; }
-            
-            initMqttClient();
             preloadAudioBuffers(["ding.mp3", "please_wait.mp3", "goto.mp3"]);
         }
 
-        async function loadAudioBuffer(fileName) {
-            if (!audioCtx) {
-                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-                audioCtx = new AudioContextClass();
+        function trimSilence(buffer) {
+            const channel = buffer.getChannelData(0);
+            const threshold = 0.02;
+            let startIdx = 0;
+            let endIdx = channel.length - 1;
+
+            for (let i = 0; i < channel.length; i++) {
+                if (Math.abs(channel[i]) > threshold) {
+                    startIdx = Math.max(0, i - 10);
+                    break;
+                }
             }
+            for (let i = channel.length - 1; i >= 0; i--) {
+                if (Math.abs(channel[i]) > threshold) {
+                    endIdx = Math.min(channel.length - 1, i + 10);
+                    break;
+                }
+            }
+            if (startIdx >= endIdx) return buffer;
+
+            const newBuffer = audioCtx.createBuffer(buffer.numberOfChannels, endIdx - startIdx, buffer.sampleRate);
+            for (let c = 0; c < buffer.numberOfChannels; c++) {
+                const oldData = buffer.getChannelData(c);
+                const newData = newBuffer.getChannelData(c);
+                for (let i = 0; i < newBuffer.length; i++) {
+                    newData[i] = oldData[startIdx + i];
+                }
+            }
+            return newBuffer;
+        }
+
+        async function loadAudioBuffer(fileName) {
             if (audioBufferCache[fileName]) return audioBufferCache[fileName];
             try {
                 const response = await fetch(voicesBaseUrl + fileName);
                 const arrayBuffer = await response.arrayBuffer();
                 let decodedBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+                decodedBuffer = trimSilence(decodedBuffer);
                 audioBufferCache[fileName] = decodedBuffer;
                 return decodedBuffer;
             } catch (e) {
@@ -326,6 +374,7 @@
         }
 
         async function preloadAudioBuffers(fileNames) {
+            if (!audioCtx) return;
             for (const file of fileNames) {
                 await loadAudioBuffer(file);
             }
@@ -387,6 +436,16 @@
             
             container.classList.add('alert-active');
             stopBtn.style.display = 'inline-block';
+            
+            // إرسال إشعار منبثق في حال كان الجوال مفيأً أو المتصفح بالخلفية
+            if ("Notification" in window && Notification.permission === "granted") {
+                try {
+                    new Notification("وصل دورك الآن 🔔", {
+                        body: `رقمك ${data.patientNumber} - يرجى التوجه إلى ${data.clinicName}`,
+                        icon: 'https://github.com/blu2ris-create/clinic-queue-system/blob/main/logo.png%20(2).png?raw=true'
+                    });
+                } catch(e) {}
+            }
 
             try {
                 const patientAudio = data.patientAudioFile || (data.patientNumber + '.mp3');
@@ -404,6 +463,12 @@
 
                 await playMergedSequence(sequence);
             } catch(e) {}
+
+            if ("vibrate" in navigator) {
+                try {
+                    navigator.vibrate([600, 300, 600, 300, 600, 300, 1000]);
+                } catch(e) {}
+            }
         }
 
         function stopAlert() {
